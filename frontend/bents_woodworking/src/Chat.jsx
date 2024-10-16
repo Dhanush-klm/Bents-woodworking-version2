@@ -56,7 +56,7 @@ export default function Chat({ isVisible }) {
           setIsInitialized(true);
         } else {
           // If not in localStorage, fetch from the server
-          const response = await axios.get(`http://localhost:5002/api/get-conversation/${user.id}`);
+          const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-conversation/${user.id}`);
           const data = response.data;
           console.log("Raw response data:", data);
           if (data && data.conversations) {
@@ -88,7 +88,7 @@ export default function Chat({ isVisible }) {
 
     const fetchRandomQuestions = async () => {
       try {
-        const response = await axios.get('http://localhost:5002/api/random-questions');
+        const response = await axios.get('https://bents-backend-server.vercel.app/api/random-questions');
         setRandomQuestions(response.data.map(q => q.question_text));
       } catch (error) {
         console.error("Error fetching random questions:", error);
@@ -111,7 +111,7 @@ export default function Chat({ isVisible }) {
           localStorage.setItem(`selectedIndex-${user.id}`, selectedIndex);
 
           // Also save to the server
-          await axios.post('http://localhost:5002/api/save-conversation', {
+          await axios.post('https://bents-backend-server.vercel.app/api/save-conversation', {
             userId: user.id,
             selectedIndex,
             conversations: JSON.stringify(conversationHistory)
@@ -150,7 +150,7 @@ export default function Chat({ isVisible }) {
     }
     
     try {
-      const response = await axios.post('http://localhost:5002/chat', {
+      const response = await axios.post('https://bents-backend-server.vercel.app/chat', {
         message: query,
         selected_index: selectedIndex,
         chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
