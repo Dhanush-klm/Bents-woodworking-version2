@@ -7,7 +7,7 @@ const app = express();
 const port = 5002;
 
 const corsOptions = {
-  origin: ['http://localhost:5173','http://localhost:5002'],
+  origin: ['https://bents-frontend-server.vercel.app','https://bents-backend-server.vercel.app'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -29,7 +29,7 @@ app.use(bodyParser.json());
 
 
 // Flask backend URL
-const FLASK_BACKEND_URL = 'http://localhost:5000';
+const FLASK_BACKEND_URL = 'https://bents-llm-server.vercel.app';
 
 
 app.post('/api/save-conversation', async (req, res) => {
