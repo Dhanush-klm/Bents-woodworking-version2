@@ -48,7 +48,7 @@ export default function Shop() {
     setLoading(true); // Set loading to true when sort option changes
     const fetchProducts = async () => {
       try {
-        const response = await axios.get(`http://localhost:5002/api/products?sort=${sortOption}`);
+        const response = await axios.get(`https://bents-backend-server.vercel.app/api/products?sort=${sortOption}`);
         if (response.data.sortOption === 'video') {
           setGroupedProducts(response.data.groupedProducts);
           setProducts([]);
