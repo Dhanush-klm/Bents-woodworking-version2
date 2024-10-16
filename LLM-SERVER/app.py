@@ -32,13 +32,11 @@ class LLMNoResponseError(LLMResponseError):
 
 load_dotenv()
 
-
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": [
-    "https://bents-model-backend.vercel.app",
-    "https://www.bentsassistant.com"
+    "http://localhost:5002",
+    "http://localhost:5173"
 ]}})
-
 
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
@@ -51,6 +49,7 @@ os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
 os.environ["LANGCHAIN_PROJECT"] = "jason-json"
+
 
 # Video title list
 VIDEO_TITLE_LIST = [
@@ -164,9 +163,6 @@ def get_matched_products(video_title):
         logging.error(f"Error in get_matched_products: {str(e)}", exc_info=True)
         return []
 
-
-
-# Add a function to verify database connection and content
 def verify_database():
     try:
         conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
@@ -184,19 +180,19 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def process_answer(answer, url):
+def process_answer(answer, urls):
     def replace_timestamp(match):
         timestamp = match.group(1)
-        full_url = combine_url_and_timestamp(url, timestamp)
-        return f"[video]({full_url})"
+        full_urls = [combine_url_and_timestamp(url, timestamp) for url in urls if url]
+        return f"[video]({','.join(full_urls)})"
     
     processed_answer = re.sub(r'\{timestamp:([^\}]+)\}', replace_timestamp, answer)
     
     video_links = re.findall(r'\[video\]\(([^\)]+)\)', processed_answer)
-    video_dict = {f'[video{i}]': link for i, link in enumerate(video_links)}
+    video_dict = {f'[video{i}]': link.split(',') for i, link in enumerate(video_links)}
     
-    for i, (placeholder, link) in enumerate(video_dict.items()):
-        processed_answer = processed_answer.replace(f'[video]({link})', placeholder)
+    for i, (placeholder, links) in enumerate(video_dict.items()):
+        processed_answer = processed_answer.replace(f'[video]({",".join(links)})', placeholder)
     
     return processed_answer, video_dict
 
@@ -260,8 +256,8 @@ def chat():
             return jsonify({
                 'response': "I'm sorry, but I didn't receive a valid question. Could you please ask a complete question?",
                 'related_products': [],
-                'url': None,
-                'context': [],
+                'urls': [],
+                'contexts': [],
                 'video_links': {}
             })
 
@@ -305,29 +301,29 @@ def chat():
             return jsonify({
                 'response': greeting_response,
                 'related_products': [],
-                'url': None,
-                'context': [],
+                'urls': [],
+                'contexts': [],
                 'video_links': {}
             })
         elif "INAPPROPRIATE" in relevance_response.upper():
             return jsonify({
                 'response': "I'm sorry, but this is outside my context of answering. Is there something else I can help you with regarding woodworking, tools, or home improvement?",
                 'related_products': [],
-                'url': None,
-                'context': [],
+                'urls': [],
+                'contexts': [],
                 'video_links': {}
             })
         elif "NOT RELEVANT" in relevance_response.upper():
             return jsonify({
                 'response': "I'm sorry, but I'm specialized in topics related to our company, woodworking, tools, and home improvement. I can also engage in general conversation or continue our previous discussion. Could you please ask a question related to these topics, continue our previous conversation, or start with a greeting?",
                 'related_products': [],
-                'url': None,
-                'context': [],
+                'urls': [],
+                'contexts': [],
                 'video_links': {}
             })
 
         # If we reach here, the query is relevant and not a greeting
-        retriever = transcript_vector_stores[selected_index].as_retriever(search_kwargs={"k": 3})
+        retriever = transcript_vector_stores[selected_index].as_retriever(search_kwargs={"k": 5})
         
         prompt = ChatPromptTemplate.from_messages([
             SystemMessagePromptTemplate.from_template(SYSTEM_INSTRUCTIONS),
@@ -353,47 +349,61 @@ def chat():
             return jsonify({'error': 'An unexpected error occurred while processing your request.'}), 500
         
         initial_answer = result['answer']
-        context = [doc.page_content for doc in result['source_documents']]
+        contexts = [doc.page_content for doc in result['source_documents']]
         source_documents = result['source_documents']
-        
-        # Extract video title from metadata of the first source document
-        video_title = "Unknown Video"
-        url = None
-        if source_documents:
-            metadata = source_documents[0].metadata
-            video_title = metadata.get('title', "Unknown Video")
-            url = metadata.get('url', None)
 
-        logging.debug(f"Extracted video title from chunk metadata: {video_title}")
-        # In your chat function, add this logging:
-        logging.debug(f"Video title before get_matched_products: {video_title}")
-        related_products = get_matched_products(video_title)
-        logging.debug(f"Retrieved matched products: {related_products}")
+        # Extract video titles and URLs from all source documents
+        video_titles = []
+        urls = []
+        for doc in source_documents:
+            metadata = doc.metadata
+            video_titles.append(metadata.get('title', "Unknown Video"))
+            urls.append(metadata.get('url', None))
 
-        # Process the answer to replace timestamps and extract video links
-        processed_answer, video_dict = process_answer(initial_answer, url)
-        
+        logging.debug(f"Extracted video titles: {video_titles}")
+        logging.debug(f"Extracted URLs: {urls}")
+
+        processed_answer, video_dict = process_answer(initial_answer, urls)
         logging.debug(f"Processed answer: {processed_answer}")
-        
-        # Get matched products based on video title
-        related_products = get_matched_products(video_title)
 
+        related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
         logging.debug(f"Retrieved matched products: {related_products}")
 
         response_data = {
             'response': processed_answer,
             'initial_answer': initial_answer,
             'related_products': related_products,
-            'url': url,
-            'context': context,
+            'urls': urls,
+            'contexts': contexts,
             'video_links': video_dict,
-            'video_title': video_title
+            'video_titles': video_titles
         }
+
+        logging.debug(f"Response data: {response_data}")
 
         return jsonify(response_data)
     except Exception as e:
         logging.error(f"Error in chat route: {str(e)}", exc_info=True)
         return jsonify({'error': 'An error occurred processing your request'}), 500
+
+@app.route('/api/user/<user_id>', methods=['GET'])
+def get_user_data(user_id):
+    try:
+        # In a real application, you'd fetch this data from a database
+        # For now, we'll return a dummy structure
+        user_data = {
+            'conversationsBySection': {
+                "bents": [],
+                "shop-improvement": [],
+                "tool-recommendations": []
+            },
+            'searchHistory': [],
+            'selectedIndex': "bents"
+        }
+        return jsonify(user_data)
+    except Exception as e:
+        logging.error(f"Error fetching user data: {str(e)}", exc_info=True)
+        return jsonify({'error': 'An error occurred fetching user data'}), 500
 
 @app.route('/upload_document', methods=['POST'])
 def upload_document():
