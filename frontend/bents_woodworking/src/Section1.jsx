@@ -75,7 +75,7 @@ export default function Section1() {
     setFormMessage({ type: '', content: '' });
 
     try {
-      const response = await axios.post('http://localhost:5002/contact', formData, {
+      const response = await axios.post('https://bents-backend-server.vercel.app/contact', formData, {
         withCredentials: true,
         headers: {
           'Content-Type': 'application/json'
