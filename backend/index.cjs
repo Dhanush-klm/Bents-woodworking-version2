@@ -60,31 +60,6 @@ app.get('/api/check-table', async (req, res) => {
   }
 });
 
-app.post('/api/save-conversation', async (req, res) => {
-  try {
-    const { userId, selectedIndex, conversations } = req.body;
-    console.log('Received data:', { userId, selectedIndex, conversations });
-
-    // Ensure conversations is properly stringified
-    const conversationsJson = JSON.stringify(conversations);
-
-    const { rows } = await pool.query(
-      `INSERT INTO conversation_history (user_id, selected_index, conversations)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id) DO UPDATE
-       SET selected_index = $2, conversations = $3, updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [userId, selectedIndex, conversationsJson]
-    );
-
-    console.log('Query executed successfully. Returned rows:', rows);
-    res.json(rows[0]);
-  } catch (error) {
-    console.error('Error saving conversation:', error);
-    res.status(500).json({ message: 'Server error', error: error.message, stack: error.stack });
-  }
-});
-
 app.get('/api/get-conversation/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
@@ -94,20 +69,61 @@ app.get('/api/get-conversation/:userId', async (req, res) => {
     );
 
     if (rows.length > 0) {
-      // Parse the conversations JSON string
       const conversationData = rows[0];
       try {
         conversationData.conversations = JSON.parse(conversationData.conversations);
       } catch (parseError) {
         console.error('Error parsing conversations JSON:', parseError);
-        conversationData.conversations = {};
+        conversationData.conversations = {
+          "bents": [],
+          "shop-improvement": [],
+          "tool-recommendations": []
+        };
       }
       res.json(conversationData);
     } else {
-      res.status(404).json({ message: 'Conversation history not found for this user' });
+      res.json({
+        user_id: userId,
+        selected_index: "bents",
+        conversations: {
+          "bents": [],
+          "shop-improvement": [],
+          "tool-recommendations": []
+        }
+      });
     }
   } catch (error) {
     console.error('Error fetching conversation history:', error);
+    res.status(500).json({ message: 'Server error', error: error.message, stack: error.stack });
+  }
+});
+
+app.post('/api/save-conversation', async (req, res) => {
+  try {
+    const { userId, selectedIndex, conversations } = req.body;
+    console.log('Received data:', { userId, selectedIndex, conversations });
+
+    // Only save if conversations is not empty
+    if (conversations && Object.values(conversations).some(arr => arr.length > 0)) {
+      const conversationsJson = JSON.stringify(conversations);
+
+      const { rows } = await pool.query(
+        `INSERT INTO conversation_history (user_id, selected_index, conversations)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO UPDATE
+         SET selected_index = $2, conversations = $3, updated_at = CURRENT_TIMESTAMP
+         RETURNING *`,
+        [userId, selectedIndex, conversationsJson]
+      );
+
+      console.log('Query executed successfully. Returned rows:', rows);
+      res.json(rows[0]);
+    } else {
+      console.log('Skipping save for empty conversations');
+      res.json({ message: 'Skipped saving empty conversations' });
+    }
+  } catch (error) {
+    console.error('Error saving conversation:', error);
     res.status(500).json({ message: 'Server error', error: error.message, stack: error.stack });
   }
 });
