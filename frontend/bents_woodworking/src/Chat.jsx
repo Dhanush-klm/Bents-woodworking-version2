@@ -45,30 +45,30 @@ export default function Chat({ isVisible }) {
     }
 
     const fetchConversationHistory = async () => {
+  try {
+    const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-conversation/${user.id}`);
+    const data = response.data;
+    if (data && data.conversations) {
+      let parsedConversations;
       try {
-        const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-conversation/${user.id}`);
-        const data = response.data;
-        if (data && data.conversations) {
-          let parsedConversations;
-          try {
-            parsedConversations = JSON.parse(data.conversations);
-          } catch (e) {
-            console.error("Error parsing conversations:", e);
-            parsedConversations = {
-              "bents": [],
-              "shop-improvement": [],
-              "tool-recommendations": []
-            };
-          }
-          setConversationHistory(parsedConversations);
-          setSelectedIndex(data.selected_index || "bents");
-        }
-        setIsInitialized(true);
-      } catch (error) {
-        console.error("Error fetching conversation history:", error);
-        setIsInitialized(true);
+        parsedConversations = JSON.parse(data.conversations);
+      } catch (e) {
+        console.error("Error parsing conversations:", e);
+        parsedConversations = {
+          "bents": [],
+          "shop-improvement": [],
+          "tool-recommendations": []
+        };
       }
-    };
+      setConversationHistory(parsedConversations);
+      setSelectedIndex(data.selected_index || "bents");
+    }
+    setIsInitialized(true);
+  } catch (error) {
+    console.error("Error fetching conversation history:", error);
+    setIsInitialized(true);
+  }
+};
 
     const fetchRandomQuestions = async () => {
       try {
