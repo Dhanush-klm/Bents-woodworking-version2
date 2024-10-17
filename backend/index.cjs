@@ -36,30 +36,39 @@ const FLASK_BACKEND_URL = 'https://bents-llm-server.vercel.app';
 app.post('/api/save-conversation', async (req, res) => {
   try {
     const { userId, selectedIndex, conversations } = req.body;
-    
-    // Ensure conversations is a string
-    const conversationsString = typeof conversations === 'string' 
-      ? conversations 
-      : JSON.stringify(conversations);
+    console.log('Received data:', { userId, selectedIndex, conversations: JSON.parse(conversations) });
 
     const { rows } = await pool.query(
       `INSERT INTO conversation_history (user_id, selected_index, conversations)
        VALUES ($1, $2, $3)
-       ON CONFLICT (user_id) 
-       DO UPDATE SET 
-         selected_index = EXCLUDED.selected_index, 
-         conversations = EXCLUDED.conversations, 
-         updated_at = CURRENT_TIMESTAMP
+       ON CONFLICT (user_id) DO UPDATE
+       SET selected_index = $2, conversations = $3, updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
-      [userId, selectedIndex, conversationsString]
+      [userId, selectedIndex, conversations]
     );
-    
+
+    console.log('Query executed successfully. Returned rows:', rows);
     res.json(rows[0]);
   } catch (error) {
-    console.error('Error saving conversation history:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Detailed error:', error);
+    console.error('Error stack:', error.stack);
+    
+    let errorMessage = 'Server error';
+    if (error.code) {
+      console.error('PostgreSQL error code:', error.code);
+      errorMessage += ` (Code: ${error.code})`;
+    }
+    
+    if (error.detail) {
+      console.error('Error detail:', error.detail);
+      errorMessage += ` - ${error.detail}`;
+    }
+
+    res.status(500).json({ message: errorMessage, error: error.message });
   }
 });
+
+
 
 
 
