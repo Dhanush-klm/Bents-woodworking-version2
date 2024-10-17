@@ -33,7 +33,6 @@ export default function Chat({ isVisible }) {
   const [showCenterSearch, setShowCenterSearch] = useState(true);
   const [randomQuestions, setRandomQuestions] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [sessionId, setSessionId] = useState(null);
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -55,8 +54,6 @@ export default function Chat({ isVisible }) {
             "tool-recommendations": []
           });
         }
-        // Generate a new session ID when the page is loaded/refreshed
-        setSessionId(Date.now().toString());
         setIsInitialized(true);
       } catch (error) {
         console.error("Error fetching conversation history:", error);
@@ -141,8 +138,7 @@ export default function Chat({ isVisible }) {
       const response = await axios.post('https://bents-backend-server.vercel.app/chat', {
         message: query,
         selected_index: selectedIndex,
-        chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text]),
-        session_id: sessionId
+        chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
       }, {
         timeout: 60000 // 60 seconds timeout
       });
@@ -160,11 +156,10 @@ export default function Chat({ isVisible }) {
       
       setConversationHistory(prev => {
         const updatedHistory = { ...prev };
-        const sectionKey = `${selectedIndex}_${sessionId}`;
-        if (!Array.isArray(updatedHistory[sectionKey])) {
-          updatedHistory[sectionKey] = [];
+        if (!Array.isArray(updatedHistory[selectedIndex])) {
+          updatedHistory[selectedIndex] = [];
         }
-        updatedHistory[sectionKey] = [...updatedHistory[sectionKey], newConversation];
+        updatedHistory[selectedIndex] = [...updatedHistory[selectedIndex], newConversation];
         return updatedHistory;
       });
 
@@ -188,7 +183,6 @@ export default function Chat({ isVisible }) {
     setCurrentConversation([]);
     setShowInitialQuestions(true);
     setShowCenterSearch(true);
-    setSessionId(Date.now().toString());
   };
 
   const handleSectionChange = (newIndex) => {
@@ -321,62 +315,43 @@ export default function Chat({ isVisible }) {
     </form>
   );
 
-  const renderSidebar = () => {
-    const groupedConversations = {};
-    if (conversationHistory) {
-      Object.entries(conversationHistory).forEach(([key, conversations]) => {
-        const [section, session] = key.split('_');
-        if (!groupedConversations[section]) {
-          groupedConversations[section] = {};
-        }
-        groupedConversations[section][session] = conversations;
-      });
-    }
-
-    return (
-      <div className={`fixed top-0 left-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-4">
-          <button onClick={() => setIsSidebarOpen(false)} className="absolute top-4 right-4">
-            <X size={24} />
-          </button>
-          <h2 className="text-xl font-bold mb-4">Conversation History</h2>
-          {Object.entries(groupedConversations).map(([section, sessions]) => (
-            <div key={section} className="mb-4">
-              <h3 className="font-semibold mb-2">{section}</h3>
-              {Object.entries(sessions).map(([session, conversations]) => (
-                <div key={session} className="mb-2">
-                  <p className="text-sm text-gray-500">{new Date(parseInt(session)).toLocaleString()}</p>
-                  {conversations.map((conv, index) => (
-                    <div
-                      key={index}
-                      className="cursor-pointer hover:bg-gray-100 p-2 rounded"
-                      onClick={() => {
-                        setSelectedIndex(section);
-                        setCurrentConversation(conversations.slice(0, index + 1));
-                        setShowInitialQuestions(false);
-                        setShowCenterSearch(false);
-                        setIsSidebarOpen(false);
-                        setSessionId(session);
-                      }}
-                    >
-                      <p className="truncate">{conv.question}</p>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
+  const renderSidebar = () => (
+    <div className={`fixed top-0 left-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className="p-4">
+        <button onClick={() => setIsSidebarOpen(false)} className="absolute top-4 right-4">
+          <X size={24} />
+        </button>
+        <h2 className="text-xl font-bold mb-4">Conversation History</h2>
+        {conversationHistory && Object.entries(conversationHistory).map(([section, conversations]) => (
+          <div key={section} className="mb-4">
+            <h3 className="font-semibold mb-2">{section}</h3>
+            {Array.isArray(conversations) && conversations.map((conv, index) => (
+              <div
+                key={index}
+                className="cursor-pointer hover:bg-gray-100 p-2 rounded"
+                onClick={() => {
+                  setSelectedIndex(section);
+                  setCurrentConversation(conversations.slice(0, index + 1));
+                  setShowInitialQuestions(false);
+                  setShowCenterSearch(false);
+                  setIsSidebarOpen(false);
+                }}
+              >
+                <p className="truncate">{conv.question}</p>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
-    );
-  };
+    </div>
+  );
 
   if (!isSignedIn) {
     return null; // or a loading spinner
   }
 
   return (
-   <div className="flex h-screen bg-white">
+    <div className="flex h-screen bg-white">
       <button
         onClick={() => setIsSidebarOpen(true)}
         className="fixed top-4 left-4 z-20 bg-white p-2 rounded-full shadow-md"
