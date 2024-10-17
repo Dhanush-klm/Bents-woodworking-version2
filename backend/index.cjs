@@ -35,6 +35,7 @@ const FLASK_BACKEND_URL = 'https://bents-llm-server.vercel.app';
 
 app.post('/api/save-conversation', async (req, res) => {
   try {
+     console.log('Received data:', req.body);
     const { userId, selectedIndex, conversations } = req.body;
     const { rows } = await pool.query(
       `INSERT INTO conversation_history (user_id, selected_index, conversations)
@@ -46,8 +47,8 @@ app.post('/api/save-conversation', async (req, res) => {
     );
     res.json(rows[0]);
   } catch (error) {
-    console.error('Error saving conversation history:', error);
-    res.status(500).json({ message: 'Server error' });
+   console.error('Detailed error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
