@@ -72,29 +72,17 @@ app.get('/api/get-conversation/:userId', async (req, res) => {
       const conversationData = rows[0];
       try {
         conversationData.conversations = JSON.parse(conversationData.conversations);
+        console.log("Parsed conversations:", JSON.stringify(conversationData.conversations, null, 2));
       } catch (parseError) {
         console.error('Error parsing conversations JSON:', parseError);
-        conversationData.conversations = {
-          "bents": [],
-          "shop-improvement": [],
-          "tool-recommendations": []
-        };
       }
       res.json(conversationData);
     } else {
-      res.json({
-        user_id: userId,
-        selected_index: "bents",
-        conversations: {
-          "bents": [],
-          "shop-improvement": [],
-          "tool-recommendations": []
-        }
-      });
+      res.status(404).json({ message: 'Conversation history not found for this user' });
     }
   } catch (error) {
     console.error('Error fetching conversation history:', error);
-    res.status(500).json({ message: 'Server error', error: error.message, stack: error.stack });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
