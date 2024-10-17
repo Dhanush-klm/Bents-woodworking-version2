@@ -21,11 +21,7 @@ export default function Chat({ isVisible }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentConversation, setCurrentConversation] = useState([]);
-  const [conversationHistory, setConversationHistory] = useState({
-    "bents": [],
-    "shop-improvement": [],
-    "tool-recommendations": []
-  });
+  const [conversationHistory, setConversationHistory] = useState(null);
   const [showInitialQuestions, setShowInitialQuestions] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingQuestionIndex, setLoadingQuestionIndex] = useState(null);
@@ -44,36 +40,37 @@ export default function Chat({ isVisible }) {
       return;
     }
 
-  const fetchConversationHistory = async () => {
-  try {
-    const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-conversation/${user.id}`);
-    const data = response.data;
-    if (data && data.conversations) {
-      setConversationHistory(data.conversations);
-      setSelectedIndex(data.selected_index || "bents");
-    } else {
-      setConversationHistory({
-        "bents": [],
-        "shop-improvement": [],
-        "tool-recommendations": []
-      });
-    }
-    setIsInitialized(true);
-  } catch (error) {
-    console.error("Error fetching conversation history:", error);
-    if (error.response) {
-      console.error("Response data:", error.response.data);
-      console.error("Response status:", error.response.status);
-      console.error("Response headers:", error.response.headers);
-    }
-    setConversationHistory({
-      "bents": [],
-      "shop-improvement": [],
-      "tool-recommendations": []
-    });
-    setIsInitialized(true);
-  }
-};
+    const fetchConversationHistory = async () => {
+      try {
+        const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-conversation/${user.id}`);
+        const data = response.data;
+        if (data && data.conversations) {
+          setConversationHistory(data.conversations);
+          setSelectedIndex(data.selected_index || "bents");
+        } else {
+          setConversationHistory({
+            "bents": [],
+            "shop-improvement": [],
+            "tool-recommendations": []
+          });
+        }
+        setIsInitialized(true);
+      } catch (error) {
+        console.error("Error fetching conversation history:", error);
+        if (error.response) {
+          console.error("Response data:", error.response.data);
+          console.error("Response status:", error.response.status);
+          console.error("Response headers:", error.response.headers);
+        }
+        setConversationHistory({
+          "bents": [],
+          "shop-improvement": [],
+          "tool-recommendations": []
+        });
+        setIsInitialized(true);
+      }
+    };
+
     const fetchRandomQuestions = async () => {
       try {
         const response = await axios.get('https://bents-backend-server.vercel.app/api/random-questions');
@@ -91,27 +88,28 @@ export default function Chat({ isVisible }) {
   }, [isSignedIn, user, navigate]);
 
   useEffect(() => {
- const saveConversationHistory = async () => {
-  if (isInitialized && isSignedIn) {
-    try {
-      console.log('Saving conversation:', {
-        userId: user.id,
-        selectedIndex,
-        conversations: conversationHistory
-      });
-      await axios.post('https://bents-backend-server.vercel.app/api/save-conversation', {
-        userId: user.id,
-        selectedIndex,
-        conversations: conversationHistory
-      });
-    } catch (error) {
-      console.error("Error saving conversation history:", error);
-    }
-  }
-};
+    const saveConversationHistory = async () => {
+      if (isInitialized && isSignedIn && conversationHistory) {
+        try {
+          console.log('Saving conversation:', {
+            userId: user.id,
+            selectedIndex,
+            conversations: conversationHistory
+          });
+          await axios.post('https://bents-backend-server.vercel.app/api/save-conversation', {
+            userId: user.id,
+            selectedIndex,
+            conversations: conversationHistory
+          });
+        } catch (error) {
+          console.error("Error saving conversation history:", error);
+        }
+      }
+    };
 
-  saveConversationHistory();
-}, [conversationHistory, selectedIndex, isInitialized, isSignedIn, user]);
+    saveConversationHistory();
+  }, [conversationHistory, selectedIndex, isInitialized, isSignedIn, user]);
+
   useEffect(() => {
     if (!isVisible && isSearching) {
       console.log('Search in progress while Chat is not visible');
@@ -324,7 +322,7 @@ export default function Chat({ isVisible }) {
           <X size={24} />
         </button>
         <h2 className="text-xl font-bold mb-4">Conversation History</h2>
-        {Object.entries(conversationHistory).map(([section, conversations]) => (
+        {conversationHistory && Object.entries(conversationHistory).map(([section, conversations]) => (
           <div key={section} className="mb-4">
             <h3 className="font-semibold mb-2">{section}</h3>
             {Array.isArray(conversations) && conversations.map((conv, index) => (
@@ -373,7 +371,7 @@ export default function Chat({ isVisible }) {
             )}
 
             {showInitialQuestions && (
-              <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+             <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {randomQuestions.map((question, index) => (
                   <button
                     key={index}
