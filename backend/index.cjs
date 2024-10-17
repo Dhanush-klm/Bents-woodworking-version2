@@ -36,8 +36,12 @@ const FLASK_BACKEND_URL = 'https://bents-llm-server.vercel.app';
 app.post('/api/save-conversation', async (req, res) => {
   try {
     const { userId, selectedIndex, conversations } = req.body;
-    console.log('Received data:', { userId, selectedIndex, conversations: JSON.parse(conversations) });
     
+    // Ensure conversations is a string
+    const conversationsString = typeof conversations === 'string' 
+      ? conversations 
+      : JSON.stringify(conversations);
+
     const { rows } = await pool.query(
       `INSERT INTO conversation_history (user_id, selected_index, conversations)
        VALUES ($1, $2, $3)
@@ -47,33 +51,18 @@ app.post('/api/save-conversation', async (req, res) => {
          conversations = EXCLUDED.conversations, 
          updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
-      [userId, selectedIndex, conversations]
+      [userId, selectedIndex, conversationsString]
     );
     
-    console.log('Query executed successfully. Returned rows:', rows);
     res.json(rows[0]);
   } catch (error) {
-    console.error('Detailed error:', error);
-    console.error('Error stack:', error.stack);
-    
-    let errorMessage = 'Server error';
-    if (error.code) {
-      console.error('PostgreSQL error code:', error.code);
-      errorMessage += ` (Code: ${error.code})`;
-    }
-    
-    if (error.detail) {
-      console.error('Error detail:', error.detail);
-      errorMessage += ` - ${error.detail}`;
-    }
-    res.status(500).json({ message: errorMessage, error: error.message });
+    console.error('Error saving conversation history:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
 
 
-
-// Get conversation history
 app.get('/api/get-conversation/:userId', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -81,13 +70,22 @@ app.get('/api/get-conversation/:userId', async (req, res) => {
       [req.params.userId]
     );
     if (rows.length > 0) {
-      res.json(rows[0]);
+      // Ensure conversations is a valid JSON string before sending
+      const conversations = rows[0].conversations;
+      const parsedConversations = typeof conversations === 'string' 
+        ? JSON.parse(conversations) 
+        : conversations;
+      
+      res.json({
+        selected_index: rows[0].selected_index,
+        conversations: JSON.stringify(parsedConversations)
+      });
     } else {
       res.json({ selected_index: 'bents', conversations: '{}' });
     }
   } catch (error) {
     console.error('Error fetching conversation history:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
