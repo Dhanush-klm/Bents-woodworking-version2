@@ -90,6 +90,11 @@ export default function Chat({ isVisible }) {
     const saveConversationHistory = async () => {
       if (isInitialized && isSignedIn) {
         try {
+          console.log('Saving conversation:', {
+          userId: user.id,
+          selectedIndex,
+          conversations: JSON.stringify(conversationHistory)
+        });
           await axios.post('https://bents-backend-server.vercel.app/api/save-conversation', {
             userId: user.id,
             selectedIndex,
