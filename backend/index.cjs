@@ -65,13 +65,16 @@ app.post('/api/save-conversation', async (req, res) => {
     const { userId, selectedIndex, conversations } = req.body;
     console.log('Received data:', { userId, selectedIndex, conversations });
 
+    // Ensure conversations is properly stringified
+    const conversationsJson = JSON.stringify(conversations);
+
     const { rows } = await pool.query(
       `INSERT INTO conversation_history (user_id, selected_index, conversations)
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id) DO UPDATE
        SET selected_index = $2, conversations = $3
        RETURNING *`,
-      [userId, selectedIndex, conversations]
+      [userId, selectedIndex, conversationsJson]
     );
 
     console.log('Query executed successfully. Returned rows:', rows);
@@ -91,7 +94,10 @@ app.get('/api/get-conversation/:userId', async (req, res) => {
     );
 
     if (rows.length > 0) {
-      res.json(rows[0]);
+      // Parse the conversations JSON string
+      const conversationData = rows[0];
+      conversationData.conversations = JSON.parse(conversationData.conversations);
+      res.json(conversationData);
     } else {
       res.status(404).json({ message: 'Conversation history not found for this user' });
     }
