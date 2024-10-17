@@ -46,40 +46,24 @@ export default function Chat({ isVisible }) {
 
     const fetchConversationHistory = async () => {
       try {
-        // First, try to get the conversation history from localStorage
-        const storedHistory = localStorage.getItem(`conversationHistory-${user.id}`);
-        const storedSelectedIndex = localStorage.getItem(`selectedIndex-${user.id}`);
-
-        if (storedHistory && storedSelectedIndex) {
-          setConversationHistory(JSON.parse(storedHistory));
-          setSelectedIndex(storedSelectedIndex);
-          setIsInitialized(true);
-        } else {
-          // If not in localStorage, fetch from the server
-          const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-conversation/${user.id}`);
-          const data = response.data;
-          console.log("Raw response data:", data);
-          if (data && data.conversations) {
-            let parsedConversations;
-            try {
-              parsedConversations = JSON.parse(data.conversations);
-            } catch (e) {
-              console.error("Error parsing conversations:", e);
-              parsedConversations = {
-                "bents": [],
-                "shop-improvement": [],
-                "tool-recommendations": []
-              };
-            }
-            setConversationHistory(parsedConversations);
-            setSelectedIndex(data.selected_index || "bents");
-            
-            // Store the fetched data in localStorage
-            localStorage.setItem(`conversationHistory-${user.id}`, JSON.stringify(parsedConversations));
-            localStorage.setItem(`selectedIndex-${user.id}`, data.selected_index || "bents");
+        const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-conversation/${user.id}`);
+        const data = response.data;
+        if (data && data.conversations) {
+          let parsedConversations;
+          try {
+            parsedConversations = JSON.parse(data.conversations);
+          } catch (e) {
+            console.error("Error parsing conversations:", e);
+            parsedConversations = {
+              "bents": [],
+              "shop-improvement": [],
+              "tool-recommendations": []
+            };
           }
-          setIsInitialized(true);
+          setConversationHistory(parsedConversations);
+          setSelectedIndex(data.selected_index || "bents");
         }
+        setIsInitialized(true);
       } catch (error) {
         console.error("Error fetching conversation history:", error);
         setIsInitialized(true);
@@ -106,11 +90,6 @@ export default function Chat({ isVisible }) {
     const saveConversationHistory = async () => {
       if (isInitialized && isSignedIn) {
         try {
-          // Save to localStorage
-          localStorage.setItem(`conversationHistory-${user.id}`, JSON.stringify(conversationHistory));
-          localStorage.setItem(`selectedIndex-${user.id}`, selectedIndex);
-
-          // Also save to the server
           await axios.post('https://bents-backend-server.vercel.app/api/save-conversation', {
             userId: user.id,
             selectedIndex,
@@ -360,6 +339,7 @@ export default function Chat({ isVisible }) {
       </div>
     </div>
   );
+
   if (!isSignedIn) {
     return null; // or a loading spinner
   }
