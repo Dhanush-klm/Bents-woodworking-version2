@@ -72,7 +72,7 @@ app.post('/api/save-conversation', async (req, res) => {
       `INSERT INTO conversation_history (user_id, selected_index, conversations)
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id) DO UPDATE
-       SET selected_index = $2, conversations = $3
+       SET selected_index = $2, conversations = $3, updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
       [userId, selectedIndex, conversationsJson]
     );
@@ -81,7 +81,7 @@ app.post('/api/save-conversation', async (req, res) => {
     res.json(rows[0]);
   } catch (error) {
     console.error('Error saving conversation:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message, stack: error.stack });
   }
 });
 
@@ -96,14 +96,19 @@ app.get('/api/get-conversation/:userId', async (req, res) => {
     if (rows.length > 0) {
       // Parse the conversations JSON string
       const conversationData = rows[0];
-      conversationData.conversations = JSON.parse(conversationData.conversations);
+      try {
+        conversationData.conversations = JSON.parse(conversationData.conversations);
+      } catch (parseError) {
+        console.error('Error parsing conversations JSON:', parseError);
+        conversationData.conversations = {};
+      }
       res.json(conversationData);
     } else {
       res.status(404).json({ message: 'Conversation history not found for this user' });
     }
   } catch (error) {
     console.error('Error fetching conversation history:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message, stack: error.stack });
   }
 });
 
