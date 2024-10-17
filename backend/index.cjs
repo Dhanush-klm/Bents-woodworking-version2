@@ -32,11 +32,38 @@ app.use(bodyParser.json());
 const FLASK_BACKEND_URL = 'https://bents-llm-server.vercel.app';
 
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT NOW()');
+    res.json({ message: 'Database connection successful', timestamp: rows[0].now });
+  } catch (error) {
+    console.error('Database connection error:', error);
+    res.status(500).json({ message: 'Database connection failed', error: error.message });
+  }
+});
+
+app.get('/api/check-table', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'conversation_history'
+    `);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error checking table structure:', error);
+    res.status(500).json({ message: 'Error checking table structure', error: error.message });
+  }
+});
 
 app.post('/api/save-conversation', async (req, res) => {
   try {
     const { userId, selectedIndex, conversations } = req.body;
-    console.log('Received data:', { userId, selectedIndex, conversations: JSON.parse(conversations) });
+    console.log('Received data:', { userId, selectedIndex, conversations });
 
     const { rows } = await pool.query(
       `INSERT INTO conversation_history (user_id, selected_index, conversations)
@@ -64,7 +91,7 @@ app.post('/api/save-conversation', async (req, res) => {
       errorMessage += ` - ${error.detail}`;
     }
 
-    res.status(500).json({ message: errorMessage, error: error.message });
+    res.status(500).json({ message: errorMessage, error: error.message, stack: error.stack });
   }
 });
 
@@ -72,31 +99,21 @@ app.post('/api/save-conversation', async (req, res) => {
 
 
 
-app.get('/api/get-conversation/:userId', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      'SELECT selected_index, conversations FROM conversation_history WHERE user_id = $1',
-      [req.params.userId]
-    );
-    if (rows.length > 0) {
-      // Ensure conversations is a valid JSON string before sending
-      const conversations = rows[0].conversations;
-      const parsedConversations = typeof conversations === 'string' 
-        ? JSON.parse(conversations) 
-        : conversations;
-      
-      res.json({
-        selected_index: rows[0].selected_index,
-        conversations: JSON.stringify(parsedConversations)
-      });
-    } else {
-      res.json({ selected_index: 'bents', conversations: '{}' });
-    }
-  } catch (error) {
-    console.error('Error fetching conversation history:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 
