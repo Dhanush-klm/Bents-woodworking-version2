@@ -60,6 +60,32 @@ app.get('/api/check-table', async (req, res) => {
   }
 });
 
+app.get('/api/get-conversation/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { rows } = await pool.query(
+      'SELECT * FROM conversation_history WHERE user_id = $1',
+      [userId]
+    );
+
+    if (rows.length > 0) {
+      const conversationData = rows[0];
+      try {
+        conversationData.conversations = JSON.parse(conversationData.conversations);
+        console.log("Parsed conversations:", JSON.stringify(conversationData.conversations, null, 2));
+      } catch (parseError) {
+        console.error('Error parsing conversations JSON:', parseError);
+      }
+      res.json(conversationData);
+    } else {
+      res.status(404).json({ message: 'Conversation history not found for this user' });
+    }
+  } catch (error) {
+    console.error('Error fetching conversation history:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 app.post('/api/save-conversation', async (req, res) => {
   try {
     const { userId, selectedIndex, conversations } = req.body;
@@ -89,32 +115,6 @@ app.post('/api/save-conversation', async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message, stack: error.stack });
   }
 });
-
-app.get('/api/get-conversation/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { rows } = await pool.query(
-      'SELECT * FROM conversation_history WHERE user_id = $1',
-      [userId]
-    );
-
-    if (rows.length > 0) {
-      const conversationData = rows[0];
-      try {
-        conversationData.conversations = JSON.parse(conversationData.conversations);
-        console.log("Parsed conversations:", JSON.stringify(conversationData.conversations, null, 2));
-      } catch (parseError) {
-        console.error('Error parsing conversations JSON:', parseError);
-        conversationData.conversations = {};
-      }
-      res.json(conversationData);
-    } else {
-      res.status(404).json({ message: 'Conversation history not found for this user' });
-    }
-  } catch (error) {
-    console.error('Error fetching conversation history:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
 
 
 
