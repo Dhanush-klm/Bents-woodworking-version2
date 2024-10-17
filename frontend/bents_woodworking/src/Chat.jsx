@@ -87,9 +87,9 @@ export default function Chat({ isVisible }) {
   }, [isSignedIn, user, navigate]);
 
   useEffect(() => {
-    const saveConversationHistory = async () => {
-      if (isInitialized && isSignedIn) {
-       try {
+  const saveConversationHistory = async () => {
+    if (isInitialized && isSignedIn) {
+      try {
         await axios.post('https://bents-backend-server.vercel.app/api/save-conversation', {
           userId: user.id,
           selectedIndex,
@@ -109,10 +109,11 @@ export default function Chat({ isVisible }) {
           console.error("Error setting up request:", error.message);
         }
       }
-    };
-    saveConversationHistory();
-  }, [conversationHistory, selectedIndex, isInitialized, isSignedIn, user]);
+    }
+  };
 
+  saveConversationHistory();
+}, [conversationHistory, selectedIndex, isInitialized, isSignedIn, user]);
   useEffect(() => {
     if (!isVisible && isSearching) {
       console.log('Search in progress while Chat is not visible');
