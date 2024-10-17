@@ -69,7 +69,7 @@ app.post('/api/save-conversation', async (req, res) => {
       `INSERT INTO conversation_history (user_id, selected_index, conversations)
        VALUES ($1, $2, $3)
        ON CONFLICT (user_id) DO UPDATE
-       SET selected_index = $2, conversations = $3, updated_at = CURRENT_TIMESTAMP
+       SET selected_index = $2, conversations = $3
        RETURNING *`,
       [userId, selectedIndex, conversations]
     );
@@ -77,24 +77,29 @@ app.post('/api/save-conversation', async (req, res) => {
     console.log('Query executed successfully. Returned rows:', rows);
     res.json(rows[0]);
   } catch (error) {
-    console.error('Detailed error:', error);
-    console.error('Error stack:', error.stack);
-    
-    let errorMessage = 'Server error';
-    if (error.code) {
-      console.error('PostgreSQL error code:', error.code);
-      errorMessage += ` (Code: ${error.code})`;
-    }
-    
-    if (error.detail) {
-      console.error('Error detail:', error.detail);
-      errorMessage += ` - ${error.detail}`;
-    }
-
-    res.status(500).json({ message: errorMessage, error: error.message, stack: error.stack });
+    console.error('Error saving conversation:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
+app.get('/api/get-conversation/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { rows } = await pool.query(
+      'SELECT * FROM conversation_history WHERE user_id = $1',
+      [userId]
+    );
+
+    if (rows.length > 0) {
+      res.json(rows[0]);
+    } else {
+      res.status(404).json({ message: 'Conversation history not found for this user' });
+    }
+  } catch (error) {
+    console.error('Error fetching conversation history:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
 
 
 
