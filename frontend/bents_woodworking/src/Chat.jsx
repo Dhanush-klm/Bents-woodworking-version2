@@ -49,23 +49,23 @@ export default function Chat({ isVisible }) {
     const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-conversation/${user.id}`);
     const data = response.data;
     if (data && data.conversations) {
-      let parsedConversations;
-      try {
-        parsedConversations = JSON.parse(data.conversations);
-      } catch (e) {
-        console.error("Error parsing conversations:", e);
-        parsedConversations = {
-          "bents": [],
-          "shop-improvement": [],
-          "tool-recommendations": []
-        };
-      }
-      setConversationHistory(parsedConversations);
+      setConversationHistory(data.conversations);
       setSelectedIndex(data.selected_index || "bents");
+    } else {
+      setConversationHistory({
+        "bents": [],
+        "shop-improvement": [],
+        "tool-recommendations": []
+      });
     }
     setIsInitialized(true);
   } catch (error) {
     console.error("Error fetching conversation history:", error);
+    setConversationHistory({
+      "bents": [],
+      "shop-improvement": [],
+      "tool-recommendations": []
+    });
     setIsInitialized(true);
   }
 };
@@ -87,30 +87,24 @@ export default function Chat({ isVisible }) {
   }, [isSignedIn, user, navigate]);
 
   useEffect(() => {
-  const saveConversationHistory = async () => {
-    if (isInitialized && isSignedIn) {
-      try {
-        await axios.post('https://bents-backend-server.vercel.app/api/save-conversation', {
-          userId: user.id,
-          selectedIndex,
-          conversations: JSON.stringify(conversationHistory)
-        });
-        console.log('Conversation saved successfully');
-        prevConversationHistory.current = conversationHistory;
-      } catch (error) {
-        console.error("Error saving conversation history:", error);
-        if (error.response) {
-          console.error("Response data:", error.response.data);
-          console.error("Response status:", error.response.status);
-          console.error("Response headers:", error.response.headers);
-        } else if (error.request) {
-          console.error("No response received:", error.request);
-        } else {
-          console.error("Error setting up request:", error.message);
-        }
-      }
+ const saveConversationHistory = async () => {
+  if (isInitialized && isSignedIn) {
+    try {
+      console.log('Saving conversation:', {
+        userId: user.id,
+        selectedIndex,
+        conversations: conversationHistory
+      });
+      await axios.post('https://bents-backend-server.vercel.app/api/save-conversation', {
+        userId: user.id,
+        selectedIndex,
+        conversations: conversationHistory
+      });
+    } catch (error) {
+      console.error("Error saving conversation history:", error);
     }
-  };
+  }
+};
 
   saveConversationHistory();
 }, [conversationHistory, selectedIndex, isInitialized, isSignedIn, user]);
