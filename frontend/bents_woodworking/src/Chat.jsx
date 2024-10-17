@@ -44,7 +44,7 @@ export default function Chat({ isVisible }) {
       return;
     }
 
-    const fetchConversationHistory = async () => {
+  const fetchConversationHistory = async () => {
   try {
     const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-conversation/${user.id}`);
     const data = response.data;
@@ -61,6 +61,11 @@ export default function Chat({ isVisible }) {
     setIsInitialized(true);
   } catch (error) {
     console.error("Error fetching conversation history:", error);
+    if (error.response) {
+      console.error("Response data:", error.response.data);
+      console.error("Response status:", error.response.status);
+      console.error("Response headers:", error.response.headers);
+    }
     setConversationHistory({
       "bents": [],
       "shop-improvement": [],
@@ -69,7 +74,6 @@ export default function Chat({ isVisible }) {
     setIsInitialized(true);
   }
 };
-
     const fetchRandomQuestions = async () => {
       try {
         const response = await axios.get('https://bents-backend-server.vercel.app/api/random-questions');
