@@ -9,10 +9,10 @@ function ProductCard({ product }) {
     ? `data:image/jpeg;base64,${product.image_data}`
     : '/path/to/default/image.jpg';
   return (
-    <Card className="w-full flex flex-col h-full">
+    <Card className="w-full flex flex-col h-full bg-white">
       <CardContent className="p-4 flex-grow flex flex-col">
         <div className="flex flex-col items-center mb-4">
-          <div className="w-full h-48 flex items-center justify-center bg-gray-100 rounded-md overflow-hidden mb-4">
+          <div className="w-full h-48 flex items-center justify-center bg-white rounded-md overflow-hidden mb-4">
             <img
               src={imageUrl}
               alt={product.title}
@@ -35,7 +35,6 @@ function ProductCard({ product }) {
     </Card>
   );
 }
-
 export default function Shop() {
   const [products, setProducts] = useState([])
   const [groupedProducts, setGroupedProducts] = useState({})
