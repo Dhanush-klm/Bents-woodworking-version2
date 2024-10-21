@@ -21,6 +21,7 @@ import base64
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 import time
 
+
 class LLMResponseError(Exception):
     pass
 
