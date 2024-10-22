@@ -8,16 +8,6 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
-    dedupe: ['react', 'react-dom'], // Add deduplication
-  },
-  optimizeDeps: {
-    include: [
-      '@radix-ui/react-select',
-      '@radix-ui/react-slot',
-      'class-variance-authority',
-      'clsx',
-      'tailwind-merge'
-    ]
   },
   build: {
     rollupOptions: {
@@ -27,10 +17,35 @@ export default defineConfig({
       ],
       output: {
         manualChunks: {
-          'radix': ['@radix-ui/react-select', '@radix-ui/react-slot'],
-          'utils': ['class-variance-authority', 'clsx', 'tailwind-merge']
+          'radix': [
+            '@radix-ui/react-select',
+            '@radix-ui/react-slot',
+          ],
+          'vendor': [
+            'lucide-react',
+            'class-variance-authority',
+            'clsx',
+            'tailwind-merge'
+          ]
         }
       }
+    },
+    commonjsOptions: {
+      include: [/node_modules/],
+      extensions: ['.js', '.cjs'],
+    }
+  },
+  optimizeDeps: {
+    include: [
+      '@radix-ui/react-select',
+      '@radix-ui/react-slot',
+      'lucide-react',
+      'class-variance-authority',
+      'clsx',
+      'tailwind-merge'
+    ],
+    esbuildOptions: {
+      target: 'es2020'
     }
   },
   server: {
