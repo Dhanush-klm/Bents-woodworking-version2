@@ -50,7 +50,7 @@ export default function Chat({ isVisible }) {
 
     const fetchSessions = async () => {
       try {
-        const response = await axios.get(`http://localhost:5002/api/get-session/${user.id}`);
+        const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-session/${user.id}`);
         const storedSessions = response.data || [];
         setSessions(storedSessions);
 
@@ -110,7 +110,7 @@ export default function Chat({ isVisible }) {
 
     const fetchRandomQuestions = async () => {
       try {
-        const response = await axios.get('http://localhost:5002/api/random-questions');
+        const response = await axios.get('https://bents-backend-server.vercel.app/api/random-questions');
         setRandomQuestions(response.data.map(q => q.question_text));
       } catch (error) {
         console.error("Error fetching random questions:", error);
@@ -161,7 +161,7 @@ export default function Chat({ isVisible }) {
             }))
           }));
 
-          await axios.post('http://localhost:5002/api/save-session', {
+          await axios.post('https://bents-backend-server.vercel.app/api/save-session', {
             userId: user.id,
             sessionData: optimizedSessions
           });
@@ -193,7 +193,7 @@ export default function Chat({ isVisible }) {
     }
     
     try {
-      const response = await axios.post('http://localhost:5002/chat', {
+      const response = await axios.post('https://bents-backend-server.vercel.app/chat', {
         message: query,
         selected_index: selectedIndex,
         chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
