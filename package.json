@@ -4,7 +4,12 @@
       "@clerk/clerk-sdk-node": "^5.0.48",
       "axios": "^1.7.7",
       "dotenv": "^16.4.5",
-      "svix": "^1.37.0"
+      "svix": "^1.37.0",
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-slot": "^1.0.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.0.0",
+    "tailwind-merge": "^2.0.0"
     }
   }
   
