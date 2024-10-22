@@ -7,7 +7,7 @@ const app = express();
 const port = 5002;
 
 const corsOptions = {
-  origin: ['https://bents-frontend-server.vercel.app','https://bents-backend-server.vercel.app'],
+  origin: ['http://localhost:5173','http://localhost:5002'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -25,148 +25,16 @@ app.get('/test-cors', (req, res) => {
   res.json({ message: 'CORS is working' });
 });
 // Middleware
-app.use(bodyParser.json());
-
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // Flask backend URL
-const FLASK_BACKEND_URL = 'https://bents-llm-server.vercel.app';
-
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-app.get('/api/test-db', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT NOW()');
-    res.json({ message: 'Database connection successful', timestamp: rows[0].now });
-  } catch (error) {
-    console.error('Database connection error:', error);
-    res.status(500).json({ message: 'Database connection failed', error: error.message });
-  }
-});
-
-app.get('/api/check-table', async (req, res) => {
-  try {
-    const { rows } = await pool.query(`
-      SELECT column_name, data_type 
-      FROM information_schema.columns 
-      WHERE table_name = 'conversation_history'
-    `);
-    res.json(rows);
-  } catch (error) {
-    console.error('Error checking table structure:', error);
-    res.status(500).json({ message: 'Error checking table structure', error: error.message });
-  }
-});
-
-app.get('/api/get-conversation/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { rows } = await pool.query(
-      'SELECT * FROM conversation_history WHERE user_id = $1',
-      [userId]
-    );
-
-    if (rows.length > 0) {
-      const conversationData = rows[0];
-      try {
-        conversationData.conversations = JSON.parse(conversationData.conversations);
-        console.log("Parsed conversations:", JSON.stringify(conversationData.conversations, null, 2));
-      } catch (parseError) {
-        console.error('Error parsing conversations JSON:', parseError);
-      }
-      res.json(conversationData);
-    } else {
-      res.status(404).json({ message: 'Conversation history not found for this user' });
-    }
-  } catch (error) {
-    console.error('Error fetching conversation history:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-});
-
-app.post('/api/save-conversation', async (req, res) => {
-  try {
-    const { userId, selectedIndex, conversations } = req.body;
-    console.log('Received data:', { userId, selectedIndex, conversations });
-
-    // Only save if conversations is not empty
-    if (conversations && Object.values(conversations).some(arr => arr.length > 0)) {
-      const conversationsJson = JSON.stringify(conversations);
-
-      const { rows } = await pool.query(
-        `INSERT INTO conversation_history (user_id, selected_index, conversations)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (user_id) DO UPDATE
-         SET selected_index = $2, conversations = $3, updated_at = CURRENT_TIMESTAMP
-         RETURNING *`,
-        [userId, selectedIndex, conversationsJson]
-      );
-
-      console.log('Query executed successfully. Returned rows:', rows);
-      res.json(rows[0]);
-    } else {
-      console.log('Skipping save for empty conversations');
-      res.json({ message: 'Skipped saving empty conversations' });
-    }
-  } catch (error) {
-    console.error('Error saving conversation:', error);
-    res.status(500).json({ message: 'Server error', error: error.message, stack: error.stack });
-  }
-});
+const FLASK_BACKEND_URL = 'http://localhost:5000';
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-//////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
-// Get user data
-app.get('/api/user/:userId', async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE user_id = $1', [req.params.userId]);
-    if (rows.length > 0) {
-      res.json(rows[0]);
-    } else {
-      res.status(404).json({ message: 'User not found' });
-    }
-  } catch (error) {
-    console.error('Error fetching user data:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Save user data
-app.post('/api/user/:userId', async (req, res) => {
-  try {
-    const { conversations, searchHistory, selectedIndex } = req.body;
-    const { rows } = await pool.query(
-      'INSERT INTO users (user_id, conversations, search_history, selected_index) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id) DO UPDATE SET conversations = $2, search_history = $3, selected_index = $4 RETURNING *',
-      [req.params.userId, JSON.stringify(conversations), JSON.stringify(searchHistory), selectedIndex]
-    );
-    res.json(rows[0]);
-  } catch (error) {
-    console.error('Error saving user data:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
-});
 
 app.get("/", (req, res) => {
   res.send("Server is running");
@@ -337,6 +205,50 @@ app.get('/api/products', async (req, res) => {
 // Test route
 app.get('/test', (req, res) => {
   res.json({ message: 'Server is working' });
+});
+
+// Modify the save session route to handle large payloads
+app.post('/api/save-session', async (req, res) => {
+  const { userId, sessionData } = req.body;
+  try {
+    const cleanedSessionData = sessionData.map(session => ({
+      ...session,
+      conversations: session.conversations.map(conv => {
+        const { products, ...cleanedConv } = conv;
+        return {
+          ...cleanedConv,
+          video: conv.video || [],
+          videoLinks: conv.videoLinks || {}
+        };
+      })
+    }));
+
+    const compressedSessionData = JSON.stringify(cleanedSessionData);
+    const { rows } = await pool.query(
+      'INSERT INTO session_hist (user_id, session_data) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET session_data = $2, updated_at = CURRENT_TIMESTAMP RETURNING *',
+      [userId, compressedSessionData]
+    );
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error saving session data:', error);
+    res.status(500).json({ message: 'An error occurred while saving session data.', error: error.message });
+  }
+});
+
+// Route to retrieve session data
+app.get('/api/get-session/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    const { rows } = await pool.query('SELECT session_data FROM session_hist WHERE user_id = $1', [userId]);
+    if (rows.length > 0) {
+      res.json(rows[0].session_data);
+    } else {
+      res.json([]); // Return an empty array if no session data found
+    }
+  } catch (error) {
+    console.error('Error retrieving session data:', error);
+    res.status(500).json({ message: 'An error occurred while retrieving session data.' });
+  }
 });
 
 // Start the server
