@@ -7,7 +7,7 @@ const app = express();
 const port = 5002;
 
 const corsOptions = {
-  origin: ['http://localhost:5173','http://localhost:5002'],
+  origin: ['http://localhost:5173','http://localhost:5002','https://bents-frontend-server.vercel.app'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
@@ -29,7 +29,7 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // Flask backend URL
-const FLASK_BACKEND_URL = 'http://localhost:5000';
+const FLASK_BACKEND_URL = 'https://bents-llm-server.vercel.app';
 
 
 
