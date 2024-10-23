@@ -107,7 +107,7 @@ export default function Shop() {
         <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-center mb-6">
           Recommended Products
         </h1>
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-4 sm:space-y-0 sm:space-x-4">
           <div className="relative w-full sm:w-64">
             <Input
               type="text"
@@ -118,7 +118,7 @@ export default function Shop() {
             />
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           </div>
-          <div className="w-[200px]">
+          <div className="w-48 sm:w-[200px] self-start sm:self-auto">
             <Select value={sortOption} onValueChange={handleSort}>
               <SelectTrigger className="w-full bg-white text-black">
                 <SelectValue placeholder="Sort" />
