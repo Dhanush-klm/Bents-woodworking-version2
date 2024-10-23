@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { ArrowRight, PlusCircle, HelpCircle, ChevronRight, Book, X } from 'lucide-react';
+import { ArrowRight, PlusCircle, HelpCircle, ChevronRight, BookOpen, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import YouTube from 'react-youtube';
 import { Button } from "@/components/ui/button";
@@ -38,9 +38,20 @@ export default function Chat({ isVisible }) {
   const [showCenterSearch, setShowCenterSearch] = useState(true);
   const [randomQuestions, setRandomQuestions] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const sidebarRef = useRef(null);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Sort sessions using useMemo to avoid unnecessary re-computations
+  const sortedSessions = useMemo(() => {
+    return [...sessions].sort((a, b) => {
+      const aDate = a.conversations && a.conversations.length > 0 ? new Date(a.conversations[0].timestamp) : new Date(0);
+      const bDate = b.conversations && b.conversations.length > 0 ? new Date(b.conversations[0].timestamp) : new Date(0);
+      return bDate - aDate; // Sort in descending order (newest first)
+    });
+  }, [sessions]);
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -174,6 +185,38 @@ export default function Chat({ isVisible }) {
     saveSessions();
   }, [sessions, isSignedIn, user]);
 
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isSidebarOpen && sidebarRef.current && !sidebarRef.current.contains(event.target)) {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (currentConversation.length > 0) {
+      scrollToLatestConversation();
+    }
+  }, [currentConversation]);
+
   const scrollToLatestConversation = () => {
     if (latestConversationRef.current) {
       latestConversationRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -181,10 +224,10 @@ export default function Chat({ isVisible }) {
   };
 
   const handleSearch = async (e, initialQuestionIndex = null) => {
-    e.preventDefault(); // Add this line to prevent default form submission
+    e.preventDefault(); // Prevent default form submission
     
     const query = initialQuestionIndex !== null ? randomQuestions[initialQuestionIndex] : searchQuery;
-    if (!query.trim() || isSearching) return;
+    if (!query.trim() || isSearching) return; // Check if already searching
     
     setIsSearching(true);
     setIsLoading(true);
@@ -233,7 +276,7 @@ export default function Chat({ isVisible }) {
     } catch (error) {
       console.error("Error fetching response:", error);
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Ensure loading state is reset
       setLoadingQuestionIndex(null);
       setIsSearching(false);
     }
@@ -313,7 +356,7 @@ export default function Chat({ isVisible }) {
   };
 
   const renderDropdownMenu = () => (
-    <div className="absolute bottom-full left-0 mb-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
+    <div ref={dropdownRef} className="absolute bottom-full left-0 mb-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
       <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
         {[
           { value: "bents", label: "All" },
@@ -337,21 +380,46 @@ export default function Chat({ isVisible }) {
   );
 
   const renderSearchBar = () => (
-    <form onSubmit={handleSearch} className="flex items-center w-full max-w-3xl mx-auto">
-      <input
-        type="text"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="Ask a question..."
-        className="flex-grow p-2 border rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
-      <button
-        type="submit"
-        className="bg-blue-500 text-white p-2 rounded-r-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        <ArrowRight size={24} />
-      </button>
-    </form>
+    <div className="flex items-center w-full">
+      <div className="flex-grow flex items-center border rounded-md bg-white shadow-sm">
+        <Button
+          onClick={handleNewConversation}
+          className="p-2 text-gray-500 hover:text-gray-700 focus:outline-none"
+          title="New Conversation"
+        >
+          <PlusCircle size={20} />
+        </Button>
+        
+        <div className="relative" ref={dropdownRef}>
+          <Button
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="p-2 text-gray-500 hover:text-gray-700 focus:outline-none"
+          >
+            <HelpCircle size={20} />
+          </Button>
+          {isDropdownOpen && renderDropdownMenu()}
+        </div>
+        
+        <div className="h-6 w-px bg-gray-300 mx-2"></div>
+        
+        <form onSubmit={handleSearch} className="flex-grow flex items-center">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Ask a question..."
+            className="flex-grow p-2 focus:outline-none"
+          />
+          <button
+            type="submit"
+            className={`p-2 text-gray-500 hover:text-gray-700 focus:outline-none ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={isLoading}
+          >
+            {isLoading ? <span className="animate-spin">⌛</span> : <ArrowRight size={20} />}
+          </button>
+        </form>
+      </div>
+    </div>
   );
 
   const renderVideoLinks = (videos, videoLinks) => {
@@ -386,28 +454,21 @@ export default function Chat({ isVisible }) {
     return null;
   };
 
-  const renderSidebar = () => {
-    // Helper function to safely get timestamp
-    const getLatestTimestamp = (session) => {
-      if (session.conversations && session.conversations.length > 0) {
-        const lastConversation = session.conversations[session.conversations.length - 1];
-        if (lastConversation.timestamp) {
-          const timestamp = new Date(lastConversation.timestamp).getTime();
-          return isNaN(timestamp) ? 0 : timestamp;
-        }
-      }
-      return 0;
-    };
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
 
-    // Sort sessions in descending order based on the timestamp of the last conversation
-    const sortedSessions = [...sessions].sort((a, b) => {
-      const aTimestamp = getLatestTimestamp(a);
-      const bTimestamp = getLatestTimestamp(b);
-      return bTimestamp - aTimestamp; // This puts the most recent timestamp first
-    });
-
-    return (
-      <div className={`fixed top-[75px] left-0 h-[calc(100vh-75px)] w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+  const renderSidebar = () => (
+    <>
+      {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setIsSidebarOpen(false)}></div>
+      )}
+      <div 
+        ref={sidebarRef}
+        className={`fixed top-0 left-0 h-full w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50 ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div className="p-4 h-full overflow-y-auto">
           <button onClick={() => setIsSidebarOpen(false)} className="absolute top-4 right-4 z-10">
             <X size={24} />
@@ -417,8 +478,7 @@ export default function Chat({ isVisible }) {
             <div
               key={session.id}
               className="cursor-pointer hover:bg-gray-100 p-2 rounded mb-2"
-              onClick={(e) => {
-                e.preventDefault();
+              onClick={() => {
                 setCurrentSessionId(session.id);
                 setCurrentConversation(session.conversations);
                 setShowInitialQuestions(false);
@@ -435,69 +495,34 @@ export default function Chat({ isVisible }) {
           ))}
         </div>
       </div>
-    );
-  };
+    </>
+  );
+
   if (!isSignedIn) {
     return null; // or a loading spinner
   }
 
   return (
-    <div className="flex h-[calc(100vh-75px)] bg-white pt-[75px]">
+    <div className="flex flex-col h-[calc(100vh-75px)] bg-white pt-[75px]">
       {renderSidebar()}
-      <div className={`flex-grow overflow-y-auto pb-20 ${isSidebarOpen ? 'ml-64' : ''} relative`}>
-        {!isSidebarOpen && (
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="fixed top-[85px] left-4 z-50 bg-white p-2 rounded-full shadow-md"
-          >
-            <Book size={24} />
-          </button>
-        )}
+      <div className="relative flex-grow overflow-hidden">
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed top-[85px] left-4 z-30 bg-white px-4 py-2 rounded-full shadow-md hover:bg-gray-100 transition-colors duration-200 flex items-center space-x-2"
+          title="Open Sessions"
+        >
+          <BookOpen size={20} />
+          <span className="font-medium">History</span>
+        </button>
         
-        <div className="mt-12"> {/* Add top margin to push content below the hamburger */}
-          {selectedConversation ? (
-            <div className="flex flex-col h-full">
-              <div className="flex-grow overflow-y-auto p-4 pb-20">
-                <div className="bg-white p-4 rounded-lg shadow mb-4">
-                  <h2 className="font-bold mb-4">{selectedConversation.question}</h2>
-                  
-                  <div className="mb-4">
-                    <h3 className="font-semibold mb-2">Related Products</h3>
-                    {selectedConversation.products && selectedConversation.products.length > 0 ? (
-                      <div className="flex overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap sm:gap-2">
-                        {selectedConversation.products.map((product, pIndex) => (
-                          <Link 
-                            key={pIndex} 
-                            to={product.link} 
-                            className="flex-shrink-0 bg-gray-100 rounded-lg p-2 flex items-center justify-between mr-2 sm:mr-0 sm:w-auto min-w-[200px] sm:min-w-0"
-                          >
-                            <span className="font-medium">{product.title}</span>
-                            <ChevronRight size={20} className="ml-2 text-gray-500" />
-                          </Link>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 italic">No related products available at the moment.</p>
-                    )}
-                  </div>
-
-                  <div className="mb-4">
-                    {renderVideos(selectedConversation.video, selectedConversation.videoLinks)}
-                    {formatResponse(selectedConversation.text || '', selectedConversation.videoLinks, selectedConversation.products)}
-                  </div>
-                  <div className="clear-both"></div>
-                </div>
-              </div>
-            </div>
-          ) : currentConversation.length === 0 ? (
-            <div className="flex flex-col items-center justify-center min-h-full p-4">
+        <div className="h-full overflow-y-auto p-4 pt-16 pb-20"> {/* Added pb-20 for bottom padding */}
+          {currentConversation.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full">
               <h2 className="text-3xl font-bold mb-8">A question creates knowledge</h2>
-              
-              {showCenterSearch && (
-                <div className="w-full max-w-2xl mb-8">
-                  {renderSearchBar()}
-                </div>
-              )}
+
+              <div className="w-full max-w-3xl mb-8">
+                {renderSearchBar()}
+              </div>
 
               {showInitialQuestions && (
                 <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -522,32 +547,32 @@ export default function Chat({ isVisible }) {
               )}
             </div>
           ) : (
-            <div className="flex flex-col h-full">
-              <div className="flex-grow overflow-y-auto p-4 pb-20">
-                {currentConversation.map((conv, index) => (
-                  <div 
-                    key={index} 
-                    className="bg-white p-4 rounded-lg shadow mb-4"
-                    ref={index === currentConversation.length - 1 ? latestConversationRef : null}
-                  >
-                    <h2 className="font-bold mb-4">{conv.question}</h2>
-                    
-                    <div className="mb-4">
-                      {renderVideos(conv.video, conv.videoLinks)}
-                      {formatResponse(conv.text || '', conv.videoLinks)}
-                    </div>
-                    <div className="clear-both"></div>
+            <div>
+              {currentConversation.map((conv, index) => (
+                <div 
+                  key={index} 
+                  className="bg-white p-4 rounded-lg shadow mb-4"
+                  ref={index === currentConversation.length - 1 ? latestConversationRef : null}
+                >
+                  <h2 className="font-bold mb-4">{conv.question}</h2>
+                  
+                  <div className="mb-4">
+                    {renderVideos(conv.video, conv.videoLinks)}
+                    {formatResponse(conv.text || '', conv.videoLinks)}
                   </div>
-                ))}
-              </div>
+                  <div className="clear-both"></div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       </div>
       
-      {!showCenterSearch && !selectedConversation && (
-        <div className={`fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 ${isSidebarOpen ? 'ml-64' : ''}`}>
-          {renderSearchBar()}
+      {currentConversation.length > 0 && (
+        <div className="absolute bottom-0 left-0 right-0 flex justify-center p-4 bg-white border-t border-gray-200">
+          <div className="w-full max-w-3xl">
+            {renderSearchBar()}
+          </div>
         </div>
       )}
     </div>
