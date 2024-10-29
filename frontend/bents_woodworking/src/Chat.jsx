@@ -74,7 +74,7 @@ export default function Chat({ isVisible }) {
       return;
     }
 
-    const fetchSessions = async () => {
+    const fetchSessions = async () => { 
       try {
         const response = await axios.get(`http://localhost:5002/api/get-session/${user.id}`);
         const storedSessions = response.data || [];
