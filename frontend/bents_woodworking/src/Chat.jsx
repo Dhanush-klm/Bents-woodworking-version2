@@ -74,7 +74,7 @@ export default function Chat({ isVisible }) {
       return;
     }
 
-    const fetchSessions = async () => { 
+    const fetchSessions = async () => {
       try {
         const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-session/${user.id}`);
         const storedSessions = response.data || [];
@@ -108,6 +108,7 @@ export default function Chat({ isVisible }) {
     setCurrentRelatedProducts([]);
     setShowInitialQuestions(true);
     setShowCenterSearch(true);
+    setIsSidebarOpen(false);
   }, [isSignedIn, user, navigate]);
 
   // Save sessions effect
@@ -268,21 +269,22 @@ export default function Chat({ isVisible }) {
 
   // Handle new conversation
   const handleNewConversation = () => {
+    // Check if current session exists and is empty
+    const currentSession = sessions.find(session => session.id === currentSessionId);
+    if (currentSession && currentSession.conversations.length === 0) {
+      // If current session is empty, just reset the state without creating a new session
+      setCurrentConversation([]);
+      setCurrentRelatedProducts([]);
+      setShowInitialQuestions(true);
+      setShowCenterSearch(true);
+      return;
+    }
+    // If current session is not empty or doesn't exist, create a new session
     const newSessionId = uuidv4();
     const newSession = { id: newSessionId, conversations: [] };
     setSessions(prevSessions => [...prevSessions, newSession]);
     setCurrentSessionId(newSessionId);
     setCurrentConversation([]);
-    setCurrentRelatedProducts([]);
-    setShowInitialQuestions(true);
-    setShowCenterSearch(true);
-  };
-
-  const handleSectionChange = (newIndex) => {
-    setSelectedIndex(newIndex);
-    setIsDropdownOpen(false);
-    setCurrentConversation([]);
-    setSelectedConversation(null);
     setCurrentRelatedProducts([]);
     setShowInitialQuestions(true);
     setShowCenterSearch(true);
@@ -432,7 +434,11 @@ export default function Chat({ isVisible }) {
         <div className="relative" ref={dropdownRef}>
           <Button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="p-2 text-gray-500 hover:text-gray-700 focus:outline-none"
+            className={`p-2 focus:outline-none ${
+              selectedIndex !== "bents" 
+                ? "text-blue-500 hover:text-blue-700" 
+                : "text-gray-500 hover:text-gray-700"
+            }`}
           >
             <HelpCircle size={20} />
           </Button>
@@ -453,7 +459,12 @@ export default function Chat({ isVisible }) {
                         : "text-gray-700 hover:bg-gray-100"
                     }`}
                   >
-                    {option.label}
+                    <div className="flex items-center justify-between">
+                      <span>{option.label}</span>
+                      {selectedIndex === option.value && (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -464,12 +475,24 @@ export default function Chat({ isVisible }) {
         <div className="h-6 w-px bg-gray-300 mx-2"></div>
         
         <form onSubmit={handleSearch} className="flex-grow flex items-center">
-          <input
-            type="text"
+          <textarea
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              // Auto-adjust height
+              e.target.style.height = 'auto';
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
+            }}
             placeholder="Ask a question..."
-            className="flex-grow p-2 focus:outline-none"
+            className="flex-grow p-2 focus:outline-none resize-none min-h-[40px] max-h-[100px] overflow-y-auto"
+            rows="1"
+            style={{ lineHeight: '20px' }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSearch(e);
+              }
+            }}
           />
           <button
             type="submit"
@@ -750,6 +773,25 @@ const styles = `
     .flex-shrink-0 {
       scroll-snap-align: start;
     }
+  }
+
+  textarea {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.5;
+  }
+
+  textarea::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  textarea::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  textarea::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
   }
 `;
 
