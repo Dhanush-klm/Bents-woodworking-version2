@@ -6,6 +6,9 @@ import YouTube from 'react-youtube';
 import { Button } from "@/components/ui/button";
 import { useUser } from '@clerk/clerk-react';
 import { v4 as uuidv4 } from 'uuid';
+import { cn } from "@/lib/utils";
+// Update these imports to use relative paths
+import { Textarea } from "./components/ui/textarea";
 
 // Function to extract YouTube video ID from URL
 const getYoutubeVideoIds = (urls) => {
@@ -171,6 +174,11 @@ export default function Chat({ isVisible }) {
     const query = index !== undefined ? randomQuestions[index] : searchQuery;
     if (!query.trim() || isSearching) return;
     
+    // Set the search query to show the selected FAQ
+    if (index !== undefined) {
+      setSearchQuery(randomQuestions[index]);
+    }
+    
     setIsSearching(true);
     setIsLoading(true);
     setLoadingProgress(0);
@@ -203,7 +211,7 @@ export default function Chat({ isVisible }) {
         timeout: 60000
       });
       
-      // Store conversation
+      // Store conversation with related products
       const newConversation = {
         question: query,
         text: response.data.response,
@@ -212,31 +220,16 @@ export default function Chat({ isVisible }) {
         video_titles: response.data.video_titles || [],
         video_timestamps: response.data.video_timestamps || {},
         videoLinks: response.data.video_links || {},
+        related_products: (response.data.related_products || []).map(product => ({
+          title: product.title,
+          link: product.link
+        })),
         timestamp: new Date().toISOString()
       };
       
-      // Process and store products
-      const simplifiedProducts = (response.data.related_products || []).map(product => ({
-        title: product.title,
-        link: product.link
-      }));
-      setCurrentRelatedProducts(simplifiedProducts);
-
-      // Process and store source videos with titles and timestamps
-      const sourceVideos = response.data.urls ? response.data.urls.map(url => ({
-        url,
-        title: response.data.video_titles?.[url] || 'Video',
-        timestamp: response.data.video_timestamps?.[url] || null
-      })) : [];
-      setCurrentSourceVideos(sourceVideos);
-
-      // Process and store tags
-      const tags = response.data.tags || [];  // Assuming your API returns tags
-      setCurrentTags(tags);
-
       setCurrentConversation(prev => [...prev, newConversation]);
       
-      // Update sessions without the sidebar content
+      // Update sessions
       setSessions(prevSessions => {
         return prevSessions.map(session => {
           if (session.id === currentSessionId) {
@@ -423,69 +416,85 @@ export default function Chat({ isVisible }) {
 
   const renderSearchBar = () => (
     <div className="flex items-center w-full">
-      <div className="flex-grow flex items-center border rounded-md bg-white shadow-sm">
+      <div className={cn(
+        "flex-grow flex items-center bg-background",
+        "border rounded-xl shadow-sm",
+        "ring-offset-background",
+        "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+      )}>
         <Button
           onClick={handleNewConversation}
-          className="p-2 text-gray-500 hover:text-gray-700 focus:outline-none"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 rounded-l-xl"
           title="New Conversation"
         >
-          <PlusCircle size={20} />
+          <PlusCircle className="h-5 w-5" />
         </Button>
+
         <div className="relative" ref={dropdownRef}>
           <Button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className={`p-2 focus:outline-none ${
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-10 w-10",
               selectedIndex !== "bents" 
                 ? "text-blue-500 hover:text-blue-700" 
-                : "text-gray-500 hover:text-gray-700"
-            }`}
+                : "text-muted-foreground hover:text-foreground"
+            )}
           >
-            <HelpCircle size={20} />
+            <HelpCircle className="h-5 w-5" />
           </Button>
           {isDropdownOpen && (
-            <div className="absolute bottom-full left-0 mb-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-20">
-              <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
+            <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl shadow-lg bg-background border z-20">
+              <div className="py-1" role="menu">
                 {[
                   { value: "bents", label: "All" },
                   { value: "shop-improvement", label: "Shop Improvement" },
                   { value: "tool-recommendations", label: "Tool Recommendations" }
                 ].map((option) => (
-                  <button
+                  <Button
                     key={option.value}
                     onClick={() => handleSectionChange(option.value)}
-                    className={`block px-4 py-2 text-sm w-full text-left ${
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start px-4 py-2 text-sm h-auto",
                       selectedIndex === option.value
-                        ? "bg-blue-500 text-white"
-                        : "text-gray-700 hover:bg-gray-100"
-                    }`}
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-accent"
+                    )}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between w-full">
                       <span>{option.label}</span>
                       {selectedIndex === option.value && (
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4 ml-2" />
                       )}
                     </div>
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
           )}
         </div>
         
-        <div className="h-6 w-px bg-gray-300 mx-2"></div>
+        <div className="h-6 w-px bg-border mx-2" />
         
         <form onSubmit={handleSearch} className="flex-grow flex items-center">
-          <textarea
+          <Textarea
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              // Auto-adjust height
               e.target.style.height = 'auto';
               e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
             }}
             placeholder="Ask a question..."
-            className="flex-grow p-2 focus:outline-none resize-none min-h-[40px] max-h-[100px] overflow-y-auto"
-            rows="1"
+            className={cn(
+              "flex-grow resize-none min-h-[40px] max-h-[100px]",
+              "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
+              "p-2"
+            )}
+            rows={1}
             style={{ lineHeight: '20px' }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -494,13 +503,19 @@ export default function Chat({ isVisible }) {
               }
             }}
           />
-          <button
+          <Button
             type="submit"
-            className={`p-2 text-gray-500 hover:text-gray-700 focus:outline-none ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-r-xl"
             disabled={isLoading}
           >
-            {isLoading ? <span className="animate-spin">⌛</span> : <ArrowRight size={20} />}
-          </button>
+            {isLoading ? (
+              <span className="animate-spin">⌛</span>
+            ) : (
+              <ArrowRight className="h-5 w-5" />
+            )}
+          </Button>
         </form>
       </div>
     </div>
@@ -606,14 +621,14 @@ export default function Chat({ isVisible }) {
     >
       <h2 className="font-bold mb-4">{conv.question}</h2>
       
-      {/* Products Carousel */}
-      {index === currentConversation.length - 1 && currentRelatedProducts.length > 0 && (
+      {/* Products Carousel - Show for all conversations */}
+      {conv.related_products && conv.related_products.length > 0 && (
         <div className="mb-6">
           <div className="overflow-x-auto custom-scrollbar">
             <div className="flex gap-3 pb-2 px-1">
-              {currentRelatedProducts.map((product, index) => (
+              {conv.related_products.map((product, idx) => (
                 <a
-                  key={index}
+                  key={idx}
                   href={product.link}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -636,38 +651,36 @@ export default function Chat({ isVisible }) {
         {formatResponse(conv.text || '', conv.videoLinks)}
       </div>
 
-      {/* Source Videos Section */}
-      {index === currentConversation.length - 1 && (
-        <div className="mt-4 border-t pt-4">
-          <h3 className="text-lg font-semibold mb-3">Recommended Videos</h3>
-          <div className="border rounded-lg p-4">
-            <h4 className="font-medium text-gray-800 mb-3">Source</h4>
-            <div className="space-y-4">
-              {conv.video && conv.video.map((url, idx) => (
-                <div key={idx} className="flex flex-col">
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group"
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-blue-600 group-hover:text-blue-800">
-                        {conv.video_titles?.[idx] || 'Video'}
+      {/* Source Videos Section - Show for all conversations */}
+      <div className="mt-4 border-t pt-4">
+        <h3 className="text-lg font-semibold mb-3">Recommended Videos</h3>
+        <div className="border rounded-lg p-4">
+          <h4 className="font-medium text-gray-800 mb-3">Source</h4>
+          <div className="space-y-4">
+            {conv.video && conv.video.map((url, idx) => (
+              <div key={idx} className="flex flex-col">
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-blue-600 group-hover:text-blue-800">
+                      {conv.video_titles?.[idx] || 'Video'}
+                    </span>
+                    {conv.video_timestamps?.[idx] && (
+                      <span className="text-sm text-gray-500 mt-1">
+                        timestamp at: {conv.video_timestamps[idx].toFixed(2)}
                       </span>
-                      {conv.video_timestamps?.[idx] && (
-                        <span className="text-sm text-gray-500 mt-1">
-                          timestamp at: {conv.video_timestamps[idx].toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                  </a>
-                </div>
-              ))}
-            </div>
+                    )}
+                  </div>
+                </a>
+              </div>
+            ))}
           </div>
         </div>
-      )}
+      </div>
       <div className="clear-both"></div>
     </div>
   );
@@ -700,7 +713,7 @@ export default function Chat({ isVisible }) {
           <span className="font-medium">History</span>
         </button>
         
-        <div className="h-full overflow-y-auto p-4 pt-16 pb-20">
+        <div className="h-full overflow-y-auto p-4 pt-16 pb-[76px]">
           <div ref={topOfConversationRef}></div>
           {currentConversation.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full">
@@ -713,14 +726,26 @@ export default function Chat({ isVisible }) {
               {showInitialQuestions && !isLoading && (
                 <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {randomQuestions.map((question, index) => (
-                    <button
+                    <div
                       key={index}
-                      onClick={(e) => handleSearch(e, index)}
-                      className="p-4 border rounded-lg hover:bg-gray-100 text-center h-full flex items-center justify-center transition-colors duration-200 ease-in-out"
-                      disabled={isSearching || isLoading}
+                      className={cn(
+                        "flex-grow flex items-center bg-background",
+                        "border rounded-xl shadow-sm hover:bg-gray-50",
+                        "ring-offset-background transition-colors duration-200",
+                        "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                      )}
                     >
-                      <span>{question}</span>
-                    </button>
+                      <button
+                        onClick={(e) => handleSearch(e, index)}
+                        className="w-full p-4 text-left"
+                        disabled={isSearching || isLoading}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-900">{question}</span>
+                          <ArrowRight className="h-4 w-4 text-gray-500" />
+                        </div>
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -734,8 +759,8 @@ export default function Chat({ isVisible }) {
         </div>
         
         {currentConversation.length > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 flex justify-center p-4 bg-white border-t border-gray-200">
-            <div className="w-full max-w-3xl">
+          <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+            <div className="w-full max-w-3xl mx-auto px-4 py-3">
               {renderSearchBar()}
             </div>
           </div>
