@@ -123,9 +123,13 @@ export default function Shop() {
               <SelectTrigger className="w-full bg-white text-black">
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default" className="text-black bg-white hover:bg-gray-100">Sort by</SelectItem>
-                <SelectItem value="video" className="text-black bg-white hover:bg-gray-100">Sort by Video Title</SelectItem>
+              <SelectContent className="bg-white border shadow-lg z-50">
+                <SelectItem value="default" className="text-black bg-white hover:bg-gray-100 cursor-pointer">
+                  Sort by
+                </SelectItem>
+                <SelectItem value="video" className="text-black bg-white hover:bg-gray-100 cursor-pointer">
+                  Sort by Video Title
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
