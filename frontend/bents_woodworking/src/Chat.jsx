@@ -60,6 +60,7 @@ export default function Chat({ isVisible }) {
   const topOfConversationRef = useRef(null);
   const [shouldScrollToTop, setShouldScrollToTop] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
+  const loadingCardRef = useRef(null);
 
   // Sort sessions using useMemo
   const sortedSessions = useMemo(() => {
@@ -186,10 +187,15 @@ export default function Chat({ isVisible }) {
     setShowInitialQuestions(false);
     setShowCenterSearch(false);
 
-    // Scroll to top before starting the search
-    if (topOfConversationRef.current) {
-      topOfConversationRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    // Immediately scroll to loading card after setting isLoading to true
+    setTimeout(() => {
+      if (loadingCardRef.current) {
+        loadingCardRef.current.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'center'
+        });
+      }
+    }, 100);
 
     // Progress interval
     const progressInterval = setInterval(() => {
@@ -200,7 +206,7 @@ export default function Chat({ isVisible }) {
         }
         return prev + 1;
       });
-    }, 150); // Adjust timing as needed
+    }, 150);
 
     try {
       const response = await axios.post('https://bents-backend-server.vercel.app/chat', {
@@ -243,6 +249,17 @@ export default function Chat({ isVisible }) {
       });
 
       setSearchQuery("");
+
+      // After setting the new conversation, scroll to the latest response
+      setTimeout(() => {
+        if (latestConversationRef.current) {
+          latestConversationRef.current.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      }, 100);
+
     } catch (error) {
       console.error("Error fetching response:", error);
     } finally {
@@ -415,21 +432,21 @@ export default function Chat({ isVisible }) {
   };
 
   const renderSearchBar = () => (
-    <div className="flex items-center w-full">
+    <div className="flex items-center w-full px-2 sm:px-0">
       <div className={cn(
-        "flex-grow flex items-center bg-background",
-        "border rounded-xl shadow-sm",
+        "flex items-center bg-background",
+        "border rounded-xl",
         "ring-offset-background",
-        "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+        "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+        "w-full max-w-xl"
       )}>
         <Button
           onClick={handleNewConversation}
           variant="ghost"
           size="icon"
-          className="h-10 w-10 rounded-l-xl"
-          title="New Conversation"
+          className="h-8 w-8 rounded-l-xl"
         >
-          <PlusCircle className="h-5 w-5" />
+          <PlusCircle className="h-4 w-4" />
         </Button>
 
         <div className="relative" ref={dropdownRef}>
@@ -438,17 +455,18 @@ export default function Chat({ isVisible }) {
             variant="ghost"
             size="icon"
             className={cn(
-              "h-10 w-10",
+              "h-8 w-8",
               selectedIndex !== "bents" 
                 ? "text-blue-500 hover:text-blue-700" 
                 : "text-muted-foreground hover:text-foreground"
             )}
+            title={selectedIndex === "bents" ? "All Categories" : "Category Selected"}
           >
-            <HelpCircle className="h-5 w-5" />
+            <HelpCircle className="h-4 w-4" />
           </Button>
           {isDropdownOpen && (
-            <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl shadow-lg bg-background border z-20">
-              <div className="py-1" role="menu">
+            <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl shadow-lg bg-white border z-50">
+              <div className="py-1 bg-white">
                 {[
                   { value: "bents", label: "All" },
                   { value: "shop-improvement", label: "Shop Improvement" },
@@ -456,10 +474,13 @@ export default function Chat({ isVisible }) {
                 ].map((option) => (
                   <Button
                     key={option.value}
-                    onClick={() => handleSectionChange(option.value)}
+                    onClick={() => {
+                      setSelectedIndex(option.value);
+                      setIsDropdownOpen(false);
+                    }}
                     variant="ghost"
                     className={cn(
-                      "w-full justify-start px-4 py-2 text-sm h-auto",
+                      "w-full justify-start px-4 py-2 text-sm h-auto bg-white",
                       selectedIndex === option.value
                         ? "bg-primary text-primary-foreground"
                         : "text-foreground hover:bg-accent"
@@ -477,8 +498,8 @@ export default function Chat({ isVisible }) {
             </div>
           )}
         </div>
-        
-        <div className="h-6 w-px bg-border mx-2" />
+
+        <div className="h-5 w-px bg-border mx-1" />
         
         <form onSubmit={handleSearch} className="flex-grow flex items-center">
           <Textarea
@@ -492,7 +513,8 @@ export default function Chat({ isVisible }) {
             className={cn(
               "flex-grow resize-none min-h-[40px] max-h-[100px]",
               "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
-              "p-2"
+              "py-2 px-3",
+              "text-base text-center"
             )}
             rows={1}
             style={{ lineHeight: '20px' }}
@@ -507,13 +529,13 @@ export default function Chat({ isVisible }) {
             type="submit"
             variant="ghost"
             size="icon"
-            className="h-10 w-10 rounded-r-xl"
+            className="h-8 w-8 rounded-r-xl"
             disabled={isLoading}
           >
             {isLoading ? (
               <span className="animate-spin">⌛</span>
             ) : (
-              <ArrowRight className="h-5 w-5" />
+              <ArrowRight className="h-4 w-4" />
             )}
           </Button>
         </form>
@@ -569,7 +591,10 @@ export default function Chat({ isVisible }) {
     const currentStep = Math.floor((loadingProgress / 100) * 4);
     
     return (
-      <div className="w-full max-w-xl mx-auto my-4 bg-white rounded-lg border shadow-sm">
+      <div 
+        ref={loadingCardRef}
+        className="w-full max-w-xl mx-auto my-4 bg-white rounded-lg border shadow-sm"
+      >
         <div className="p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-4">
@@ -616,7 +641,8 @@ export default function Chat({ isVisible }) {
   const renderConversation = (conv, index) => (
     <div 
       key={index} 
-      className="bg-white p-4 rounded-lg shadow mb-4"
+      className="bg-white p-4 rounded-lg shadow mb-4 
+        ml-0 sm:ml-[60px] md:ml-[120px]"
       ref={index === currentConversation.length - 1 ? latestConversationRef : null}
     >
       <h2 className="font-bold mb-4">{conv.question}</h2>
@@ -706,35 +732,139 @@ export default function Chat({ isVisible }) {
       <div className="relative flex-grow overflow-hidden">
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="fixed top-[85px] left-4 z-30 bg-white px-4 py-2 rounded-full shadow-md hover:bg-gray-100 transition-colors duration-200 flex items-center space-x-2"
-          title="Open Sessions"
+          className="fixed top-[85px] left-4 z-30 bg-white px-3 py-2 rounded-full shadow-md 
+            hover:bg-gray-100 transition-colors duration-200 flex items-center space-x-2
+            md:px-4 md:left-4 sm:left-2 sm:px-2"
         >
-          <BookOpen size={20} />
-          <span className="font-medium">History</span>
+          <BookOpen size={20} className="sm:w-4 sm:h-4 md:w-5 md:h-5" />
+          <span className="font-medium sm:text-sm md:text-base">History</span>
         </button>
         
-        <div className="h-full overflow-y-auto p-4 pt-16 pb-[76px]">
+        <div className="h-full overflow-y-auto p-4 pt-24 pb-24">
           <div ref={topOfConversationRef}></div>
           {currentConversation.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full">
-              <h2 className="text-3xl font-bold mb-8">A question creates knowledge</h2>
-
-              <div className="w-full max-w-3xl mb-8">
-                {renderSearchBar()}
-              </div>
-
-              {showInitialQuestions && !isLoading && (
-                <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {randomQuestions.map((question, index) => (
-                    <div
-                      key={index}
-                      className={cn(
-                        "flex-grow flex items-center bg-background",
-                        "border rounded-xl shadow-sm hover:bg-gray-50",
-                        "ring-offset-background transition-colors duration-200",
-                        "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-                      )}
+              <h2 className="text-3xl font-bold mb-8 sm:text-2xl text-center">A question creates knowledge</h2>
+              <div className="w-full max-w-4xl mb-8 px-4 mx-auto">
+                <div className="flex items-center justify-center w-full">
+                  <div className={cn(
+                    "flex items-center bg-background",
+                    "border rounded-xl",
+                    "ring-offset-background",
+                    "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+                    "w-full"
+                  )}>
+                    <Button
+                      onClick={handleNewConversation}
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-l-xl"
                     >
+                      <PlusCircle className="h-4 w-4" />
+                    </Button>
+
+                    <div className="relative" ref={dropdownRef}>
+                      <Button
+                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-8 w-8",
+                          selectedIndex !== "bents" 
+                            ? "text-blue-500 hover:text-blue-700" 
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                        title={selectedIndex === "bents" ? "All Categories" : "Category Selected"}
+                      >
+                        <HelpCircle className="h-4 w-4" />
+                      </Button>
+                      {isDropdownOpen && (
+                        <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl shadow-lg bg-white border z-50">
+                          <div className="py-1 bg-white">
+                            {[
+                              { value: "bents", label: "All" },
+                              { value: "shop-improvement", label: "Shop Improvement" },
+                              { value: "tool-recommendations", label: "Tool Recommendations" }
+                            ].map((option) => (
+                              <Button
+                                key={option.value}
+                                onClick={() => {
+                                  setSelectedIndex(option.value);
+                                  setIsDropdownOpen(false);
+                                }}
+                                variant="ghost"
+                                className={cn(
+                                  "w-full justify-start px-4 py-2 text-sm h-auto bg-white",
+                                  selectedIndex === option.value
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-foreground hover:bg-accent"
+                                )}
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <span>{option.label}</span>
+                                  {selectedIndex === option.value && (
+                                    <ChevronRight className="h-4 w-4 ml-2" />
+                                  )}
+                                </div>
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="h-5 w-px bg-border mx-1" />
+                    
+                    <form onSubmit={handleSearch} className="flex-grow flex items-center">
+                      <Textarea
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          e.target.style.height = 'auto';
+                          e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
+                        }}
+                        placeholder="Ask a question..."
+                        className={cn(
+                          "flex-grow resize-none min-h-[40px] max-h-[100px]",
+                          "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
+                          "py-2 px-3",
+                          "text-base text-center"
+                        )}
+                        rows={1}
+                        style={{ lineHeight: '20px' }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSearch(e);
+                          }
+                        }}
+                      />
+                      <Button
+                        type="submit"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 rounded-r-xl"
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (
+                          <span className="animate-spin">⌛</span>
+                        ) : (
+                          <ArrowRight className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              {showInitialQuestions && !isLoading && (
+                <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4">
+                  {randomQuestions.map((question, index) => (
+                    <div key={index} className={cn(
+                      "flex-grow flex items-center bg-background",
+                      "border rounded-xl shadow-sm hover:bg-gray-50",
+                      "ring-offset-background transition-colors duration-200",
+                      "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                    )}>
                       <button
                         onClick={(e) => handleSearch(e, index)}
                         className="w-full p-4 text-left"
@@ -751,17 +881,198 @@ export default function Chat({ isVisible }) {
               )}
             </div>
           ) : (
-            <div>
-              {currentConversation.map((conv, index) => renderConversation(conv, index))}
+            <div className="space-y-4">
+              {currentConversation.map((conv, index) => (
+                <div 
+                  key={index} 
+                  className="bg-white p-4 rounded-lg shadow mb-4 
+                    ml-0 sm:ml-[60px] md:ml-[120px]"
+                  ref={index === currentConversation.length - 1 ? latestConversationRef : null}
+                >
+                  <h2 className="font-bold mb-4">{conv.question}</h2>
+                  
+                  {/* Products Carousel - Show for all conversations */}
+                  {conv.related_products && conv.related_products.length > 0 && (
+                    <div className="mb-6">
+                      <div className="overflow-x-auto custom-scrollbar">
+                        <div className="flex gap-3 pb-2 px-1">
+                          {conv.related_products.map((product, idx) => (
+                            <a
+                              key={idx}
+                              href={product.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-shrink-0 w-44 p-3 border rounded-lg hover:bg-gray-50 transition-all duration-200 
+                                       shadow-sm hover:shadow-md transform hover:-translate-y-0.5 bg-white"
+                            >
+                              <span className="text-gray-900 hover:text-gray-700 line-clamp-2 text-sm font-medium">
+                                {product.title}
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Video Players */}
+                  <div className="mb-4">
+                    {renderVideos(conv.video, conv.videoLinks)}
+                    {formatResponse(conv.text || '', conv.videoLinks)}
+                  </div>
+
+                  {/* Source Videos Section - Show for all conversations */}
+                  <div className="mt-4 border-t pt-4">
+                    <h3 className="text-lg font-semibold mb-3">Recommended Videos</h3>
+                    <div className="border rounded-lg p-4">
+                      <h4 className="font-medium text-gray-800 mb-3">Source</h4>
+                      <div className="space-y-4">
+                        {conv.video && conv.video.map((url, idx) => (
+                          <div key={idx} className="flex flex-col">
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group"
+                            >
+                              <div className="flex flex-col">
+                                <span className="text-blue-600 group-hover:text-blue-800">
+                                  {conv.video_titles?.[idx] || 'Video'}
+                                </span>
+                                {conv.video_timestamps?.[idx] && (
+                                  <span className="text-sm text-gray-500 mt-1">
+                                    timestamp at: {conv.video_timestamps[idx].toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="clear-both"></div>
+                </div>
+              ))}
             </div>
           )}
-          {isLoading && renderLoadingFact()}
+          {isLoading && (
+            <div className="ml-0 sm:ml-[60px] md:ml-[120px]">
+              {renderLoadingFact()}
+            </div>
+          )}
         </div>
         
         {currentConversation.length > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200">
-            <div className="w-full max-w-3xl mx-auto px-4 py-3">
-              {renderSearchBar()}
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t">
+            <div className="flex justify-center w-full px-4 py-2">
+              <div className={cn(
+                "flex items-center bg-background",
+                "border rounded-xl",
+                "ring-offset-background",
+                "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+                "w-full max-w-xl"
+              )}>
+                <Button
+                  onClick={handleNewConversation}
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-l-xl"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                </Button>
+
+                <div className="relative" ref={dropdownRef}>
+                  <Button
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8",
+                      selectedIndex !== "bents" 
+                        ? "text-blue-500 hover:text-blue-700" 
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    title={selectedIndex === "bents" ? "All Categories" : "Category Selected"}
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </Button>
+                  {isDropdownOpen && (
+                    <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl shadow-lg bg-white border z-50">
+                      <div className="py-1 bg-white">
+                        {[
+                          { value: "bents", label: "All" },
+                          { value: "shop-improvement", label: "Shop Improvement" },
+                          { value: "tool-recommendations", label: "Tool Recommendations" }
+                        ].map((option) => (
+                          <Button
+                            key={option.value}
+                            onClick={() => {
+                              setSelectedIndex(option.value);
+                              setIsDropdownOpen(false);
+                            }}
+                            variant="ghost"
+                            className={cn(
+                              "w-full justify-start px-4 py-2 text-sm h-auto bg-white",
+                              selectedIndex === option.value
+                                ? "bg-primary text-primary-foreground"
+                                : "text-foreground hover:bg-accent"
+                            )}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span>{option.label}</span>
+                              {selectedIndex === option.value && (
+                                <ChevronRight className="h-4 w-4 ml-2" />
+                              )}
+                            </div>
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="h-5 w-px bg-border mx-1" />
+                
+                <form onSubmit={handleSearch} className="flex-grow flex items-center">
+                  <Textarea
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
+                    }}
+                    placeholder="Ask a question..."
+                    className={cn(
+                      "flex-grow resize-none min-h-[40px] max-h-[100px]",
+                      "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
+                      "py-2 px-3",
+                      "text-base text-center"
+                    )}
+                    rows={1}
+                    style={{ lineHeight: '20px' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSearch(e);
+                      }
+                    }}
+                  />
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-r-xl"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <span className="animate-spin">⌛</span>
+                    ) : (
+                      <ArrowRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                </form>
+              </div>
             </div>
           </div>
         )}
@@ -824,3 +1135,25 @@ const styles = `
 const styleSheet = document.createElement("style");
 styleSheet.innerText = styles;
 document.head.appendChild(styleSheet);
+
+// Update handleSectionChange to work for both initial and ongoing conversations
+const handleSectionChange = (value) => {
+  setSelectedIndex(value);
+  setIsDropdownOpen(false);
+  
+  // Update the search context based on selection
+  switch(value) {
+    case "shop-improvement":
+      // Set context for shop improvement
+      setCurrentTags(['shop-improvement']);
+      break;
+    case "tool-recommendations":
+      // Set context for tool recommendations
+      setCurrentTags(['tool-recommendations']);
+      break;
+    default:
+      // Reset to all categories
+      setCurrentTags([]);
+      break;
+  }
+};
