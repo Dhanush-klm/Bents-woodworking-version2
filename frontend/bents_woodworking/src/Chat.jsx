@@ -175,9 +175,13 @@ export default function Chat({ isVisible }) {
     const query = index !== undefined ? randomQuestions[index] : searchQuery;
     if (!query.trim() || isSearching) return;
     
-    // Set the search query to show the selected FAQ
+    // Set the search query to show the selected FAQ with truncation
     if (index !== undefined) {
-      setSearchQuery(randomQuestions[index]);
+      const maxLength = 100; // Adjust this value based on your search bar size
+      const truncatedQuery = randomQuestions[index].length > maxLength 
+        ? randomQuestions[index].substring(0, maxLength) + '...'
+        : randomQuestions[index];
+      setSearchQuery(truncatedQuery);
     }
     
     setIsSearching(true);
@@ -505,7 +509,11 @@ export default function Chat({ isVisible }) {
           <Textarea
             value={searchQuery}
             onChange={(e) => {
-              setSearchQuery(e.target.value);
+              const maxLength = 100; // Same maxLength as above
+              const truncatedValue = e.target.value.length > maxLength 
+                ? e.target.value.substring(0, maxLength) + '...'
+                : e.target.value;
+              setSearchQuery(truncatedValue);
               e.target.style.height = 'auto';
               e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
             }}
@@ -514,10 +522,16 @@ export default function Chat({ isVisible }) {
               "flex-grow resize-none min-h-[40px] max-h-[100px]",
               "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
               "py-2 px-3",
-              "text-base text-center"
+              "text-base text-center",
+              "overflow-hidden text-ellipsis" // Added these classes
             )}
             rows={1}
-            style={{ lineHeight: '20px' }}
+            style={{ 
+              lineHeight: '20px',
+              whiteSpace: 'nowrap',  // Added this style
+              overflow: 'hidden',    // Added this style
+              textOverflow: 'ellipsis' // Added this style
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -593,7 +607,7 @@ export default function Chat({ isVisible }) {
     return (
       <div 
         ref={loadingCardRef}
-        className="w-full max-w-xl mx-auto my-4 bg-white rounded-lg border shadow-sm"
+        className="w-full max-w-xl mx-auto mt-2 mb-4 bg-white rounded-[2rem] border shadow-sm"
       >
         <div className="p-6">
           <div className="space-y-4">
@@ -641,8 +655,10 @@ export default function Chat({ isVisible }) {
   const renderConversation = (conv, index) => (
     <div 
       key={index} 
-      className="bg-white p-4 rounded-lg shadow mb-4 
-        ml-0 sm:ml-[60px] md:ml-[120px]"
+      className={cn(
+        "bg-white p-4 shadow mb-4 ml-0 sm:ml-[60px] md:ml-[120px]",
+        "rounded-[2rem]"
+      )}
       ref={index === currentConversation.length - 1 ? latestConversationRef : null}
     >
       <h2 className="font-bold mb-4">{conv.question}</h2>
@@ -740,7 +756,7 @@ export default function Chat({ isVisible }) {
           <span className="font-medium sm:text-sm md:text-base">History</span>
         </button>
         
-        <div className="h-full overflow-y-auto p-4 pt-24 pb-24">
+        <div className="h-full overflow-y-auto p-4 pt-16 pb-24">
           <div ref={topOfConversationRef}></div>
           {currentConversation.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full">
@@ -819,7 +835,11 @@ export default function Chat({ isVisible }) {
                       <Textarea
                         value={searchQuery}
                         onChange={(e) => {
-                          setSearchQuery(e.target.value);
+                          const maxLength = 100; // Same maxLength as above
+                          const truncatedValue = e.target.value.length > maxLength 
+                            ? e.target.value.substring(0, maxLength) + '...'
+                            : e.target.value;
+                          setSearchQuery(truncatedValue);
                           e.target.style.height = 'auto';
                           e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
                         }}
@@ -828,10 +848,16 @@ export default function Chat({ isVisible }) {
                           "flex-grow resize-none min-h-[40px] max-h-[100px]",
                           "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
                           "py-2 px-3",
-                          "text-base text-center"
+                          "text-base text-center",
+                          "overflow-hidden text-ellipsis" // Added these classes
                         )}
                         rows={1}
-                        style={{ lineHeight: '20px' }}
+                        style={{ 
+                          lineHeight: '20px',
+                          whiteSpace: 'nowrap',  // Added this style
+                          overflow: 'hidden',    // Added this style
+                          textOverflow: 'ellipsis' // Added this style
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
@@ -885,8 +911,10 @@ export default function Chat({ isVisible }) {
               {currentConversation.map((conv, index) => (
                 <div 
                   key={index} 
-                  className="bg-white p-4 rounded-lg shadow mb-4 
-                    ml-0 sm:ml-[60px] md:ml-[120px]"
+                  className={cn(
+                    "bg-white p-4 shadow mb-4 ml-0 sm:ml-[60px] md:ml-[120px]",
+                    "rounded-[2rem]"
+                  )}
                   ref={index === currentConversation.length - 1 ? latestConversationRef : null}
                 >
                   <h2 className="font-bold mb-4">{conv.question}</h2>
@@ -1038,7 +1066,11 @@ export default function Chat({ isVisible }) {
                   <Textarea
                     value={searchQuery}
                     onChange={(e) => {
-                      setSearchQuery(e.target.value);
+                      const maxLength = 100; // Same maxLength as above
+                      const truncatedValue = e.target.value.length > maxLength 
+                        ? e.target.value.substring(0, maxLength) + '...'
+                        : e.target.value;
+                      setSearchQuery(truncatedValue);
                       e.target.style.height = 'auto';
                       e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
                     }}
@@ -1047,10 +1079,16 @@ export default function Chat({ isVisible }) {
                       "flex-grow resize-none min-h-[40px] max-h-[100px]",
                       "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
                       "py-2 px-3",
-                      "text-base text-center"
+                      "text-base text-center",
+                      "overflow-hidden text-ellipsis" // Added these classes
                     )}
                     rows={1}
-                    style={{ lineHeight: '20px' }}
+                    style={{ 
+                      lineHeight: '20px',
+                      whiteSpace: 'nowrap',  // Added this style
+                      overflow: 'hidden',    // Added this style
+                      textOverflow: 'ellipsis' // Added this style
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
