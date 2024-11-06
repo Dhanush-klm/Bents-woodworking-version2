@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingBag, MessageCircle, Home, Menu, X, ChevronRight } from 'lucide-react';
+import { ShoppingBag, MessageCircle, Home, Menu, X } from 'lucide-react';
 import { LazyLoadImage } from 'react-lazy-load-image-component';
 import 'react-lazy-load-image-component/src/effects/blur.css';
 import bents_logo from "../public/bents-logo.jpg";
-import { SignInButton, SignUpButton, UserButton, useUser } from '@clerk/clerk-react';
 
 const Header = ({ sessions, currentSessionId, onSessionSelect, onNewSession }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { isSignedIn, user } = useUser();
   const navigate = useNavigate();
 
   const toggleMenu = () => {
@@ -46,24 +44,6 @@ const Header = ({ sessions, currentSessionId, onSessionSelect, onNewSession }) =
             className="max-h-12 w-auto"
           />
         </Link>
-        <div className="ml-auto flex items-center space-x-2">
-          {isSignedIn ? (
-            <UserButton afterSignOutUrl="/" />
-          ) : (
-            <>
-              <SignInButton mode="modal">
-                <button className="bg-white text-black px-4 py-2 rounded hover:bg-gray-200">
-                  Sign In
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="bg-[rgba(23,155,215,255)] text-white px-4 py-2 rounded hover:bg-[rgba(20,139,193,255)]">
-                  Sign Up
-                </button>
-              </SignUpButton>
-            </>
-          )}
-        </div>
       </div>
 
       {/* Sidebar Menu */}
@@ -92,16 +72,6 @@ const Header = ({ sessions, currentSessionId, onSessionSelect, onNewSession }) =
                 ))}
               </ul>
             </div>
-            {isSignedIn && (
-              <div className="absolute bottom-0 left-0 right-0 bg-gray-100 border-t border-gray-200 p-4">
-                <div className="flex items-center">
-                  <UserButton afterSignOutUrl="/" />
-                  <span className="ml-2 text-sm text-gray-700 truncate">
-                    {user.primaryEmailAddress.emailAddress}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
