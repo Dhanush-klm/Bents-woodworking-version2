@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MessageSquare, LayoutDashboard } from 'lucide-react';
 import axios from "axios";
-import { useUser, useSignIn, SignInButton } from '@clerk/clerk-react';
 
 function ToolRecommendationLogo({ className = "w-12 h-12" }) {
   return (
@@ -52,8 +51,6 @@ function FeatureCard({ icon, title, description }) {
 }
 
 export default function Section1() {
-  const { isSignedIn, user } = useUser();
-  const { signIn, isLoaded: isSignInLoaded } = useSignIn();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
@@ -94,20 +91,6 @@ export default function Section1() {
     }
   };
 
-  const handleSignIn = async () => {
-    if (!isSignInLoaded) return;
-    try {
-      const result = await signIn.create({
-        strategy: "oauth_google",
-        redirectUrl: window.location.origin,
-       
-      });
-    
-    } catch (err) {
-      console.error("Error signing in", err);
-    }
-  };
-
   return (
     <div className="pt-16">
       <section className="bg-black text-white">
@@ -119,20 +102,9 @@ export default function Section1() {
             Your AI-powered companion for all things woodworking. Get expert advice, tool recommendations, and shop improvement tips.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            {isSignedIn ? (
-              <>
-                <Link to="/chat" className="inline-block bg-[rgba(23,155,215,255)] text-black font-semibold py-3 px-6 rounded-lg hover:bg-[rgba(20,139,193,255)] transition duration-300">
-                  Start Chatting
-                </Link>
-               
-              </>
-            ) : (
-              <SignInButton mode="modal">
-                <button className="inline-block bg-[rgba(23,155,215,255)] text-black font-semibold py-3 px-6 rounded-lg hover:bg-[rgba(20,139,193,255)] transition duration-300">
-                  Sign In to Start
-                </button>
-              </SignInButton>
-            )}
+            <Link to="/chat" className="inline-block bg-[rgba(23,155,215,255)] text-black font-semibold py-3 px-6 rounded-lg hover:bg-[rgba(20,139,193,255)] transition duration-300">
+              Start Chatting
+            </Link>
             <Link to="/shop" className="inline-block bg-black text-white font-semibold py-3 px-6 rounded-lg border-2 border-white hover:bg-white hover:text-black transition duration-300">
               Shop Now
             </Link>
@@ -193,79 +165,68 @@ export default function Section1() {
       <section className="bg-[rgba(23,155,215,255)] py-16">
         <div className="container mx-auto px-4">
           <h2 className="text-black text-3xl md:text-4xl font-bold mb-8 text-center">Contact Us</h2>
-          {isSignedIn ? (
-            <form className="max-w-lg mx-auto" onSubmit={handleSubmit}>
-              <div className="mb-4">
-                <label htmlFor="name" className="block text-black font-semibold mb-2">Name</label>
-                <input
-                  type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label htmlFor="email" className="block text-black font-semibold mb-2">Email</label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label htmlFor="subject" className="block text-black font-semibold mb-2">Subject</label>
-                <input
-                  type="text"
-                  id="subject"
-                  name="subject"
-                  value={formData.subject}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label htmlFor="message" className="block text-black font-semibold mb-2">Your Message</label>
-                <textarea
-                  id="message"
-                  name="message"
-                  value={formData.message}
-                  onChange={handleChange}
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
-                  required
-                ></textarea>
-              </div>
-              {formMessage.content && (
-                <div className={`mb-4 p-2 rounded ${formMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {formMessage.content}
-                </div>
-              )}
-              <button
-                type="submit"
-                className="w-full bg-black text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-800 transition duration-300"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Sending...' : 'Send Message'}
-              </button>
-            </form>
-          ) : (
-            <div className="text-center">
-              <p className="text-black text-lg mb-4">Please sign in to contact us.</p>
-              <SignInButton mode="modal">
-                <button className="bg-black text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-800 transition duration-300">
-                  Sign In
-                </button>
-              </SignInButton>
+          <form className="max-w-lg mx-auto" onSubmit={handleSubmit}>
+            <div className="mb-4">
+              <label htmlFor="name" className="block text-black font-semibold mb-2">Name</label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
+                required
+              />
             </div>
-          )}
+            <div className="mb-4">
+              <label htmlFor="email" className="block text-black font-semibold mb-2">Email</label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="subject" className="block text-black font-semibold mb-2">Subject</label>
+              <input
+                type="text"
+                id="subject"
+                name="subject"
+                value={formData.subject}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
+                required
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="message" className="block text-black font-semibold mb-2">Your Message</label>
+              <textarea
+                id="message"
+                name="message"
+                value={formData.message}
+                onChange={handleChange}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
+                required
+              ></textarea>
+            </div>
+            {formMessage.content && (
+              <div className={`mb-4 p-2 rounded ${formMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {formMessage.content}
+              </div>
+            )}
+            <button
+              type="submit"
+              className="w-full bg-black text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-800 transition duration-300"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Sending...' : 'Send Message'}
+            </button>
+          </form>
         </div>
       </section>
     </div>
