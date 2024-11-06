@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
-import { SignedIn, SignedOut, RedirectToSignIn, useUser } from '@clerk/clerk-react';
 import Header from './Header';
 import Section1 from './Section1';
 import Footer from './Footer';
@@ -11,20 +10,10 @@ import LoginPage from './LoginPage';
 import ErrorBoundary from './ErrorBoundary';
 import { v4 as uuidv4 } from 'uuid';
 
-function ProtectedRoute({ children }) {
-  return (
-    <>
-      <SignedIn>{children}</SignedIn>
-      <SignedOut><RedirectToSignIn /></SignedOut>
-    </>
-  );
-}
-
 function App() {
   const location = useLocation();
   const [isChatVisible, setIsChatVisible] = useState(false);
   const showFooter = location.pathname !== '/chat';
-  const { user } = useUser();
 
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
@@ -34,25 +23,21 @@ function App() {
   }, [location]);
 
   useEffect(() => {
-    if (user) {
-      // Load sessions from localStorage
-      const storedSessions = JSON.parse(localStorage.getItem(`chatSessions-${user.id}`)) || [];
-      setSessions(storedSessions);
+    const storedSessions = JSON.parse(localStorage.getItem('chatSessions-guest')) || [];
+    setSessions(storedSessions);
 
-      // Create a new session if there are no sessions or if the last session has conversations
-      if (storedSessions.length === 0 || storedSessions[storedSessions.length - 1].conversations.length > 0) {
-        handleNewSession();
-      } else {
-        setCurrentSessionId(storedSessions[storedSessions.length - 1].id);
-      }
+    if (storedSessions.length === 0 || storedSessions[storedSessions.length - 1].conversations.length > 0) {
+      handleNewSession();
+    } else {
+      setCurrentSessionId(storedSessions[storedSessions.length - 1].id);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
-    if (user && sessions.length > 0) {
-      localStorage.setItem(`chatSessions-${user.id}`, JSON.stringify(sessions));
+    if (sessions.length > 0) {
+      localStorage.setItem('chatSessions-guest', JSON.stringify(sessions));
     }
-  }, [user, sessions]);
+  }, [sessions]);
 
   const handleSessionSelect = (sessionId) => {
     setCurrentSessionId(sessionId);
@@ -79,24 +64,19 @@ function App() {
             <Route path="/" element={<Section1 />} />
             <Route path="/shop" element={<Shop />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route
-              path="/dashboard"
-              element={<ProtectedRoute><Dashboard /></ProtectedRoute>}
-            />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route
               path="/chat"
               element={
-                <ProtectedRoute>
-                  <div className={`fixed inset-0 bg-white ${isChatVisible ? 'block' : 'hidden'}`}>
-                    <Chat 
-                      isVisible={isChatVisible}
-                      sessions={sessions}
-                      setSessions={setSessions}
-                      currentSessionId={currentSessionId}
-                      setCurrentSessionId={setCurrentSessionId}
-                    />
-                  </div>
-                </ProtectedRoute>
+                <div className={`fixed inset-0 bg-white ${isChatVisible ? 'block' : 'hidden'}`}>
+                  <Chat 
+                    isVisible={isChatVisible}
+                    sessions={sessions}
+                    setSessions={setSessions}
+                    currentSessionId={currentSessionId}
+                    setCurrentSessionId={setCurrentSessionId}
+                  />
+                </div>
               }
             />
           </Routes>
