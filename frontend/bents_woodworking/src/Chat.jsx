@@ -4,7 +4,6 @@ import { ArrowRight, PlusCircle, HelpCircle, ChevronRight, BookOpen, X } from 'l
 import { Link, useNavigate } from 'react-router-dom';
 import YouTube from 'react-youtube';
 import { Button } from "@/components/ui/button";
-import { useUser } from '@clerk/clerk-react';
 import { v4 as uuidv4 } from 'uuid';
 import { cn } from "@/lib/utils";
 // Update these imports to use relative paths
@@ -29,7 +28,6 @@ const processingSteps = [
 ];
 
 export default function Chat({ isVisible }) {
-  const { isSignedIn, user } = useUser();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentConversation, setCurrentConversation] = useState([]);
@@ -73,14 +71,10 @@ export default function Chat({ isVisible }) {
 
   // Initial Setup Effect
   useEffect(() => {
-    if (!isSignedIn) {
-      navigate('/login');
-      return;
-    }
-
     const fetchSessions = async () => {
       try {
-        const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-session/${user.id}`);
+        const guestId = 'guest-user';
+        const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-session/${guestId}`);
         const storedSessions = response.data || [];
         setSessions(storedSessions);
 
@@ -113,13 +107,14 @@ export default function Chat({ isVisible }) {
     setShowInitialQuestions(true);
     setShowCenterSearch(true);
     setIsSidebarOpen(false);
-  }, [isSignedIn, user, navigate]);
+  }, []);
 
   // Save sessions effect
   useEffect(() => {
     const saveSessions = async () => {
-      if (isSignedIn && sessions.length > 0 && user) {
+      if (sessions.length > 0) {
         try {
+          const guestId = 'guest-user';
           const optimizedSessions = sessions.map(session => ({
             id: session.id,
             conversations: session.conversations.map(conv => ({
@@ -132,7 +127,7 @@ export default function Chat({ isVisible }) {
           }));
 
           await axios.post('https://bents-backend-server.vercel.app/api/save-session', {
-            userId: user.id,
+            userId: guestId,
             sessionData: optimizedSessions
           });
         } catch (error) {
@@ -142,7 +137,7 @@ export default function Chat({ isVisible }) {
     };
 
     saveSessions();
-  }, [sessions, isSignedIn, user]);
+  }, [sessions]);
 
   // Scroll effect
   useEffect(() => {
@@ -738,10 +733,6 @@ export default function Chat({ isVisible }) {
   }, [currentConversation.length]); // This will trigger when a new conversation is added
 
   // Main render
-  if (!isSignedIn) {
-    return null;
-  }
-
   return (
     <div className="flex flex-col h-[calc(100vh-75px)] bg-white pt-[75px]">
       {renderSidebar()}
