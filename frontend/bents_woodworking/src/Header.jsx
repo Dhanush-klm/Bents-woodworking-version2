@@ -5,7 +5,7 @@ import { LazyLoadImage } from 'react-lazy-load-image-component';
 import 'react-lazy-load-image-component/src/effects/blur.css';
 import bents_logo from "../public/bents-logo.jpg";
 
-const Header = ({ sessions, currentSessionId, onSessionSelect, onNewSession }) => {
+const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -27,26 +27,36 @@ const Header = ({ sessions, currentSessionId, onSessionSelect, onNewSession }) =
 
   return (
     <header className="fixed top-0 left-0 right-0 bg-black text-white p-4 shadow-md z-50">
-      <div className="container mx-auto flex items-center">
-        <button
-          className="text-white focus:outline-none mr-4"
-          onClick={toggleMenu}
-        >
-          <Menu size={24} />
-        </button>
-        <Link to="/" className="flex items-center">
-          <LazyLoadImage
-            src={bents_logo}
-            alt="Bent's Woodworking"
-            width={100}
-            height={50}
-            effect="blur"
-            className="max-h-12 w-auto"
-          />
-        </Link>
+      <div className="flex items-center justify-between px-4 max-w-[2000px] mx-auto">
+        <div className="flex items-center">
+          <button
+            className="text-white focus:outline-none mr-4"
+            onClick={() => setIsMenuOpen(true)}
+          >
+            <Menu size={24} />
+          </button>
+          <Link to="/" className="flex items-center">
+            <LazyLoadImage
+              src={bents_logo}
+              alt="Bent's Woodworking"
+              width={100}
+              height={50}
+              effect="blur"
+              className="max-h-12 w-auto"
+            />
+          </Link>
+        </div>
+
+        <div className="flex items-center space-x-4">
+          <Link to="/chat" className="text-white hover:text-gray-300">
+            <MessageCircle size={24} />
+          </Link>
+          <Link to="/shop" className="text-white hover:text-gray-300">
+            <ShoppingBag size={24} />
+          </Link>
+        </div>
       </div>
 
-      {/* Sidebar Menu */}
       {isMenuOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-50" 
