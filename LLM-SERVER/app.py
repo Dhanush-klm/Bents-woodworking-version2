@@ -35,11 +35,7 @@ class LLMNoResponseError(LLMResponseError):
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": [
-    "https://bents-backend-server.vercel.app",
-    "https://bents-frontend-server.vercel.app",
-    "https://bents-next-ebon.vercel.app"
-]}})
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002"]}})
 
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
@@ -183,19 +179,86 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def process_answer(answer, urls):
-    def replace_timestamp(match):
+def process_answer(answer, urls, source_documents):
+    def extract_context(text, timestamp_pos, window=150):
+        start = max(0, timestamp_pos - window)
+        end = min(len(text), timestamp_pos + window)
+        return text[start:end].strip()
+
+    def generate_description(context, timestamp):
+        description_prompt = f"""
+        Given this woodworking video context at {timestamp}, create an extremely concise action phrase (max 6-8 words).
+
+        Context: {context}
+
+        Rules:
+        1. Start with an action verb
+        2. Name the specific tool/technique
+        3. Must be 6-8 words only
+        4. Focus on the single main action
+        5. Be direct and clear
+
+        Example formats:
+        - "Demonstrates table saw fence alignment technique"
+        - "Installs dust collection system components"
+        - "Shows track saw cutting method"
+
+        Description:"""
+
+        try:
+            enhanced_description = llm.predict(description_prompt).strip()
+            # Take only first 8 words maximum
+            words = enhanced_description.split()[:8]
+            return ' '.join(words)
+        except Exception as e:
+            logging.error(f"Error generating description: {str(e)}")
+            # Fallback to a very short context
+            return ' '.join(context.split()[:6])
+
+    def replace_timestamp(match, source_index, source_documents):
         timestamp = match.group(1)
-        full_urls = [combine_url_and_timestamp(url, timestamp) for url in urls if url]
-        return f"[video]({','.join(full_urls)})"
+        timestamp_pos = match.start()
+        context = extract_context(answer, timestamp_pos)
+        
+        # Get the correct URL and title for this timestamp
+        current_url = urls[source_index] if source_index < len(urls) else None
+        current_metadata = source_documents[source_index].metadata if source_index < len(source_documents) else {}
+        current_title = current_metadata.get('title', "Unknown Video")
+        
+        enhanced_description = generate_description(context, timestamp)
+        
+        full_urls = [combine_url_and_timestamp(current_url, timestamp)] if current_url else []
+        
+        return {
+            'links': full_urls,
+            'timestamp': timestamp,
+            'description': enhanced_description,
+            'video_title': current_title  # Now using the correct title from metadata
+        }
     
-    processed_answer = re.sub(r'\{timestamp:([^\}]+)\}', replace_timestamp, answer)
+    # Find all timestamps and their contexts
+    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
+    timestamps_with_context = [
+        replace_timestamp(match, i, source_documents) 
+        for i, match in enumerate(timestamp_matches)
+    ]
     
-    video_links = re.findall(r'\[video\]\(([^\)]+)\)', processed_answer)
-    video_dict = {f'[video{i}]': link.split(',') for i, link in enumerate(video_links)}
+    # Create enhanced video dictionary
+    video_dict = {
+        f'[video{i}]': {
+            'urls': entry['links'],
+            'timestamp': entry['timestamp'],
+            'description': entry['description'],
+            'video_title': entry['video_title']
+        }
+        for i, entry in enumerate(timestamps_with_context)
+    }
     
-    for i, (placeholder, links) in enumerate(video_dict.items()):
-        processed_answer = processed_answer.replace(f'[video]({",".join(links)})', placeholder)
+    # Replace timestamps in the answer with placeholders
+    processed_answer = answer
+    for i, match in enumerate(timestamp_matches):
+        placeholder = f'[video{i}]'
+        processed_answer = processed_answer.replace(match.group(0), placeholder)
     
     return processed_answer, video_dict
 
@@ -233,6 +296,7 @@ def upsert_transcript(transcript_text, metadata, index_name):
         chunk_metadata = metadata.copy()
         chunk_metadata['chunk_id'] = f"{metadata['title']}_chunk_{i}"
         chunk_metadata['url'] = metadata.get('url', '')
+        chunk_metadata['title'] = metadata.get('title', 'Unknown Video')
         documents.append(LangchainDocument(page_content=chunk, metadata=chunk_metadata))
     
     transcript_vector_stores[index_name].add_documents(documents)
@@ -366,7 +430,7 @@ def chat():
         logging.debug(f"Extracted video titles: {video_titles}")
         logging.debug(f"Extracted URLs: {urls}")
 
-        processed_answer, video_dict = process_answer(initial_answer, urls)
+        processed_answer, video_dict = process_answer(initial_answer, urls, source_documents)
         logging.debug(f"Processed answer: {processed_answer}")
 
         related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
