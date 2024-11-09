@@ -21,11 +21,54 @@ const getYoutubeVideoIds = (urls) => {
 
 // Replace the woodworkingFacts array with processingSteps
 const processingSteps = [
-  "Rewriting query",
+  "Understanding query",
   "Searching knowledge base",
   "Processing data",
   "Generating answer"
 ];
+
+// Add this new CSS-in-JS style block near the top of the file
+const watermarkStyles = `
+  .watermark-background {
+    position: relative;
+    background: linear-gradient(
+      135deg,
+      #f8fafc 0%,
+      #f1f5f9 100%
+    );
+  }
+
+  .watermark-background::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+      radial-gradient(circle at 25px 25px, rgba(148, 163, 184, 0.05) 2%, transparent 15%),
+      radial-gradient(circle at 75px 75px, rgba(148, 163, 184, 0.05) 2%, transparent 15%);
+    background-size: 100px 100px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Optional: Add a second layer for more depth */
+  .watermark-background::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+      radial-gradient(circle at 50px 50px, rgba(148, 163, 184, 0.03) 2%, transparent 12%);
+    background-size: 100px 100px;
+    background-position: 25px 25px;
+    pointer-events: none;
+    z-index: 0;
+  }
+`;
 
 export default function Chat({ isVisible }) {
   const navigate = useNavigate();
@@ -170,23 +213,19 @@ export default function Chat({ isVisible }) {
     const query = index !== undefined ? randomQuestions[index] : searchQuery;
     if (!query.trim() || isSearching) return;
     
-    // Set the search query to show the selected FAQ with truncation
-    if (index !== undefined) {
-      const maxLength = 100; // Adjust this value based on your search bar size
-      const truncatedQuery = randomQuestions[index].length > maxLength 
-        ? randomQuestions[index].substring(0, maxLength) + '...'
-        : randomQuestions[index];
-      setSearchQuery(truncatedQuery);
-    }
-    
     setIsSearching(true);
     setIsLoading(true);
     setLoadingProgress(0);
-    if (index !== undefined) setLoadingQuestionIndex(index);
+    if (index !== undefined) {
+      setLoadingQuestionIndex(index);
+      setSearchQuery(randomQuestions[index]); // Set search query for random questions
+    }
     setShowInitialQuestions(false);
-    setShowCenterSearch(false);
 
-    // Immediately scroll to loading card after setting isLoading to true
+    // Don't clear the search query immediately when loading
+    const currentQuery = query;
+
+    // Scroll to loading card after state updates
     setTimeout(() => {
       if (loadingCardRef.current) {
         loadingCardRef.current.scrollIntoView({ 
@@ -196,7 +235,7 @@ export default function Chat({ isVisible }) {
       }
     }, 100);
 
-    // Progress interval
+    // Start progress interval
     const progressInterval = setInterval(() => {
       setLoadingProgress(prev => {
         if (prev >= 100) {
@@ -209,7 +248,7 @@ export default function Chat({ isVisible }) {
 
     try {
       const response = await axios.post('https://bents-backend-server.vercel.app/chat', {
-        message: query,
+        message: currentQuery,
         selected_index: selectedIndex,
         chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
       }, {
@@ -218,7 +257,7 @@ export default function Chat({ isVisible }) {
       
       // Store conversation with related products
       const newConversation = {
-        question: query,
+        question: currentQuery,
         text: response.data.response,
         initial_answer: response.data.initial_answer,
         video: response.data.urls || [],
@@ -247,6 +286,7 @@ export default function Chat({ isVisible }) {
         });
       });
 
+      // Only clear the search query after the response is received
       setSearchQuery("");
 
       // After setting the new conversation, scroll to the latest response
@@ -261,6 +301,8 @@ export default function Chat({ isVisible }) {
 
     } catch (error) {
       console.error("Error fetching response:", error);
+      // Optionally clear the search query on error
+      setSearchQuery("");
     } finally {
       clearInterval(progressInterval);
       setIsLoading(false);
@@ -377,8 +419,8 @@ export default function Chat({ isVisible }) {
 
     if (videoIds.size > 0) {
       const opts = {
-        height: '160',
-        width: '250',
+        height: '120',
+        width: '180',
         playerVars: {
           autoplay: 0,
           modestbranding: 1,
@@ -431,7 +473,12 @@ export default function Chat({ isVisible }) {
   };
 
   const renderSearchBar = () => (
-    <div className="flex items-center w-full px-2 sm:px-0">
+    <div className="flex flex-col items-center w-full px-2 sm:px-0">
+      {currentConversation.length === 0 && (
+        <h1 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+          A question creates knowledge
+        </h1>
+      )}
       <div className={cn(
         "flex items-center bg-background",
         "border rounded-xl",
@@ -504,7 +551,7 @@ export default function Chat({ isVisible }) {
           <Textarea
             value={searchQuery}
             onChange={(e) => {
-              const maxLength = 100; // Same maxLength as above
+              const maxLength = 100;
               const truncatedValue = e.target.value.length > maxLength 
                 ? e.target.value.substring(0, maxLength) + '...'
                 : e.target.value;
@@ -518,14 +565,16 @@ export default function Chat({ isVisible }) {
               "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
               "py-2 px-3",
               "text-base text-center",
-              "overflow-hidden text-ellipsis" // Added these classes
+              "overflow-hidden text-ellipsis",
+              isLoading && currentConversation.length === 0 ? "opacity-50" : ""
             )}
+            disabled={isLoading}
             rows={1}
             style={{ 
               lineHeight: '20px',
-              whiteSpace: 'nowrap',  // Added this style
-              overflow: 'hidden',    // Added this style
-              textOverflow: 'ellipsis' // Added this style
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -567,7 +616,7 @@ export default function Chat({ isVisible }) {
           <button onClick={() => setIsSidebarOpen(false)} className="absolute top-4 right-4 z-10">
             <X size={24} />
           </button>
-          <h2 className="text-xl font-bold mb-4 mt-8">Sessions</h2>
+          <h2 className="text-xl font-bold mb-4 mt-8">History</h2>
           {sortedSessions.map((session) => (
             <div
               key={session.id}
@@ -586,7 +635,7 @@ export default function Chat({ isVisible }) {
               {session.conversations && session.conversations.length > 0 ? (
                 <p className="text-sm truncate">{session.conversations[0].question}</p>
               ) : (
-                <p className="text-sm italic text-gray-500">Empty session</p>
+                <p className="text-sm italic text-gray-500">New conversation</p>
               )}
             </div>
           ))}
@@ -602,11 +651,11 @@ export default function Chat({ isVisible }) {
     return (
       <div 
         ref={loadingCardRef}
-        className="w-full max-w-xl mx-auto mt-2 mb-4 bg-white rounded-[2rem] border shadow-sm"
+        className="w-full max-w-xl mx-auto bg-white rounded-[2rem] border shadow-sm"
       >
         <div className="p-6">
           <div className="space-y-4">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-1">
               <h3 className="text-lg font-semibold">Processing Your Query</h3>
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
             </div>
@@ -656,7 +705,7 @@ export default function Chat({ isVisible }) {
       )}
       ref={index === currentConversation.length - 1 ? latestConversationRef : null}
     >
-      <h2 className="font-bold mb-4">{conv.question}</h2>
+      <h2 className="text-xl font-bold mb-4">{conv.question}</h2>
       
       {/* Products Carousel - Show for all conversations */}
       {conv.related_products && conv.related_products.length > 0 && (
@@ -683,17 +732,17 @@ export default function Chat({ isVisible }) {
       )}
 
       {/* Video Players */}
-      <div className="mb-4">
+      <div className="mb-4 text-base">
         {renderVideos(conv.video, conv.videoLinks)}
         {formatResponse(conv.text || '', conv.videoLinks)}
       </div>
 
       {/* Source Videos Section - Show for all conversations */}
       <div className="mt-4 border-t pt-4">
-        <h3 className="text-lg font-semibold mb-3">Recommended Videos</h3>
+        <h3 className="text-xl font-semibold mb-3">Recommended Videos</h3>
         <div className="border rounded-lg p-4">
-          <h4 className="font-medium text-gray-800 mb-3">Source</h4>
-          <div className="space-y-4">
+          <h4 className="text-lg font-medium text-gray-800 mb-3">Source</h4>
+          <div className="space-y-2">
             {conv.video && conv.video.map((url, idx) => (
               <div key={idx} className="flex flex-col">
                 <a
@@ -734,7 +783,7 @@ export default function Chat({ isVisible }) {
 
   // Main render
   return (
-    <div className="flex flex-col h-[calc(100vh-75px)] bg-white pt-[75px]">
+    <div className="flex flex-col h-[calc(100vh-75px)] bg-white pt-[75px] watermark-background">
       {renderSidebar()}
       <div className="relative flex-grow overflow-hidden">
         <button
@@ -749,362 +798,76 @@ export default function Chat({ isVisible }) {
         
         <div className="h-full overflow-y-auto p-4 pt-16 pb-24">
           <div ref={topOfConversationRef}></div>
-          {currentConversation.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full">
-              <h2 className="text-3xl font-bold mb-8 sm:text-2xl text-center">A question creates knowledge</h2>
-              <div className="w-full max-w-4xl mb-8 px-4 mx-auto">
-                <div className="flex items-center justify-center w-full">
-                  <div className={cn(
-                    "flex items-center bg-background",
-                    "border rounded-xl",
-                    "ring-offset-background",
-                    "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
-                    "w-full"
-                  )}>
-                    <Button
-                      onClick={handleNewConversation}
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-l-xl"
-                    >
-                      <PlusCircle className="h-4 w-4" />
-                    </Button>
-
-                    <div className="relative" ref={dropdownRef}>
-                      <Button
-                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                          "h-8 w-8",
-                          selectedIndex !== "bents" 
-                            ? "text-blue-500 hover:text-blue-700" 
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                        title={selectedIndex === "bents" ? "All Categories" : "Category Selected"}
-                      >
-                        <HelpCircle className="h-4 w-4" />
-                      </Button>
-                      {isDropdownOpen && (
-                        <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl shadow-lg bg-white border z-50">
-                          <div className="py-1 bg-white">
-                            {[
-                              { value: "bents", label: "All" },
-                              { value: "shop-improvement", label: "Shop Improvement" },
-                              { value: "tool-recommendations", label: "Tool Recommendations" }
-                            ].map((option) => (
-                              <Button
-                                key={option.value}
-                                onClick={() => {
-                                  setSelectedIndex(option.value);
-                                  setIsDropdownOpen(false);
-                                }}
-                                variant="ghost"
-                                className={cn(
-                                  "w-full justify-start px-4 py-2 text-sm h-auto bg-white",
-                                  selectedIndex === option.value
-                                    ? "bg-primary text-primary-foreground"
-                                    : "text-foreground hover:bg-accent"
-                                )}
-                              >
-                                <div className="flex items-center justify-between w-full">
-                                  <span>{option.label}</span>
-                                  {selectedIndex === option.value && (
-                                    <ChevronRight className="h-4 w-4 ml-2" />
-                                  )}
-                                </div>
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="h-5 w-px bg-border mx-1" />
-                    
-                    <form onSubmit={handleSearch} className="flex-grow flex items-center">
-                      <Textarea
-                        value={searchQuery}
-                        onChange={(e) => {
-                          const maxLength = 100; // Same maxLength as above
-                          const truncatedValue = e.target.value.length > maxLength 
-                            ? e.target.value.substring(0, maxLength) + '...'
-                            : e.target.value;
-                          setSearchQuery(truncatedValue);
-                          e.target.style.height = 'auto';
-                          e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
-                        }}
-                        placeholder="Ask a question..."
-                        className={cn(
-                          "flex-grow resize-none min-h-[40px] max-h-[100px]",
-                          "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
-                          "py-2 px-3",
-                          "text-base text-center",
-                          "overflow-hidden text-ellipsis" // Added these classes
-                        )}
-                        rows={1}
-                        style={{ 
-                          lineHeight: '20px',
-                          whiteSpace: 'nowrap',  // Added this style
-                          overflow: 'hidden',    // Added this style
-                          textOverflow: 'ellipsis' // Added this style
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSearch(e);
-                          }
-                        }}
-                      />
-                      <Button
-                        type="submit"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 rounded-r-xl"
-                        disabled={isLoading}
-                      >
-                        {isLoading ? (
-                          <span className="animate-spin">⌛</span>
-                        ) : (
-                          <ArrowRight className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </form>
+          
+          {/* Only show top search bar when no conversations exist */}
+          {currentConversation.length === 0 && (
+            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] w-full max-w-2xl mx-auto px-4">
+              <div className="space-y-8">
+                <div className="w-full">
+                  <div className="flex items-center justify-center w-full">
+                    {renderSearchBar()}
                   </div>
                 </div>
+                
+                {isLoading && (
+                  <div className="w-full max-w-xl mx-auto">
+                    {renderLoadingFact()}
+                  </div>
+                )}
+                
+                {showInitialQuestions && !isLoading && (
+                  <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {randomQuestions.map((question, index) => (
+                      <div key={index} className={cn(
+                        "flex-grow flex items-center bg-background",
+                        "border rounded-xl shadow-sm hover:bg-gray-50",
+                        "ring-offset-background transition-colors duration-200",
+                        "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                      )}>
+                        <button
+                          onClick={(e) => handleSearch(e, index)}
+                          className="w-full p-4 text-left"
+                          disabled={isSearching || isLoading}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-900">{question}</span>
+                            <ArrowRight className="h-4 w-4 text-gray-500" />
+                          </div>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              {showInitialQuestions && !isLoading && (
-                <div className="w-full max-w-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4">
-                  {randomQuestions.map((question, index) => (
-                    <div key={index} className={cn(
-                      "flex-grow flex items-center bg-background",
-                      "border rounded-xl shadow-sm hover:bg-gray-50",
-                      "ring-offset-background transition-colors duration-200",
-                      "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-                    )}>
-                      <button
-                        onClick={(e) => handleSearch(e, index)}
-                        className="w-full p-4 text-left"
-                        disabled={isSearching || isLoading}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-900">{question}</span>
-                          <ArrowRight className="h-4 w-4 text-gray-500" />
-                        </div>
-                      </button>
-                    </div>
-                  ))}
+            </div>
+          )}
+
+          {/* Conversations */}
+          {currentConversation.length > 0 && (
+            <div className="space-y-4 pb-[180px]">
+              {currentConversation.map((conv, index) => renderConversation(conv, index))}
+              
+              {/* Loading state - moved here, above the fixed search bar but below conversations */}
+              {isLoading && (
+                <div className="w-full max-w-xl mx-auto px-4">
+                  {renderLoadingFact()}
                 </div>
               )}
             </div>
-          ) : (
-            <div className="space-y-4">
-              {currentConversation.map((conv, index) => (
-                <div 
-                  key={index} 
-                  className={cn(
-                    "bg-white p-4 shadow mb-4 ml-0 sm:ml-[60px] md:ml-[120px]",
-                    "rounded-[2rem]"
-                  )}
-                  ref={index === currentConversation.length - 1 ? latestConversationRef : null}
-                >
-                  <h2 className="font-bold mb-4">{conv.question}</h2>
-                  
-                  {/* Products Carousel - Show for all conversations */}
-                  {conv.related_products && conv.related_products.length > 0 && (
-                    <div className="mb-6">
-                      <div className="overflow-x-auto custom-scrollbar">
-                        <div className="flex gap-3 pb-2 px-1">
-                          {conv.related_products.map((product, idx) => (
-                            <a
-                              key={idx}
-                              href={product.link}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex-shrink-0 w-44 p-3 border rounded-lg hover:bg-gray-50 transition-all duration-200 
-                                       shadow-sm hover:shadow-md transform hover:-translate-y-0.5 bg-white"
-                            >
-                              <span className="text-gray-900 hover:text-gray-700 line-clamp-2 text-sm font-medium">
-                                {product.title}
-                              </span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Video Players */}
-                  <div className="mb-4">
-                    {renderVideos(conv.video, conv.videoLinks)}
-                    {formatResponse(conv.text || '', conv.videoLinks)}
-                  </div>
-
-                  {/* Source Videos Section - Show for all conversations */}
-                  <div className="mt-4 border-t pt-4">
-                    <h3 className="text-lg font-semibold mb-3">Recommended Videos</h3>
-                    <div className="border rounded-lg p-4">
-                      <h4 className="font-medium text-gray-800 mb-3">Source</h4>
-                      <div className="space-y-4">
-                        {conv.video && conv.video.map((url, idx) => (
-                          <div key={idx} className="flex flex-col">
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="group"
-                            >
-                              <div className="flex flex-col">
-                                <span className="text-blue-600 group-hover:text-blue-800">
-                                  {conv.video_titles?.[idx] || 'Video'}
-                                </span>
-                                {conv.video_timestamps?.[idx] && (
-                                  <span className="text-sm text-gray-500 mt-1">
-                                    timestamp at: {conv.video_timestamps[idx].toFixed(2)}
-                                  </span>
-                                )}
-                              </div>
-                            </a>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="clear-both"></div>
-                </div>
-              ))}
-            </div>
           )}
-          {isLoading && (
-            <div className="ml-0 sm:ml-[60px] md:ml-[120px]">
-              {renderLoadingFact()}
+
+          {/* Fixed bottom search bar when conversations exist */}
+          {currentConversation.length > 0 && (
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
+              {/* Search bar */}
+              <div className="flex justify-center w-full px-4 py-4">
+                <div className="w-full max-w-xl">
+                  {renderSearchBar()}
+                </div>
+              </div>
             </div>
           )}
         </div>
-        
-        {currentConversation.length > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 bg-white border-t">
-            <div className="flex justify-center w-full px-4 py-2">
-              <div className={cn(
-                "flex items-center bg-background",
-                "border rounded-xl",
-                "ring-offset-background",
-                "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
-                "w-full max-w-xl"
-              )}>
-                <Button
-                  onClick={handleNewConversation}
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-l-xl"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                </Button>
-
-                <div className="relative" ref={dropdownRef}>
-                  <Button
-                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      "h-8 w-8",
-                      selectedIndex !== "bents" 
-                        ? "text-blue-500 hover:text-blue-700" 
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                    title={selectedIndex === "bents" ? "All Categories" : "Category Selected"}
-                  >
-                    <HelpCircle className="h-4 w-4" />
-                  </Button>
-                  {isDropdownOpen && (
-                    <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl shadow-lg bg-white border z-50">
-                      <div className="py-1 bg-white">
-                        {[
-                          { value: "bents", label: "All" },
-                          { value: "shop-improvement", label: "Shop Improvement" },
-                          { value: "tool-recommendations", label: "Tool Recommendations" }
-                        ].map((option) => (
-                          <Button
-                            key={option.value}
-                            onClick={() => {
-                              setSelectedIndex(option.value);
-                              setIsDropdownOpen(false);
-                            }}
-                            variant="ghost"
-                            className={cn(
-                              "w-full justify-start px-4 py-2 text-sm h-auto bg-white",
-                              selectedIndex === option.value
-                                ? "bg-primary text-primary-foreground"
-                                : "text-foreground hover:bg-accent"
-                            )}
-                          >
-                            <div className="flex items-center justify-between w-full">
-                              <span>{option.label}</span>
-                              {selectedIndex === option.value && (
-                                <ChevronRight className="h-4 w-4 ml-2" />
-                              )}
-                            </div>
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="h-5 w-px bg-border mx-1" />
-                
-                <form onSubmit={handleSearch} className="flex-grow flex items-center">
-                  <Textarea
-                    value={searchQuery}
-                    onChange={(e) => {
-                      const maxLength = 100; // Same maxLength as above
-                      const truncatedValue = e.target.value.length > maxLength 
-                        ? e.target.value.substring(0, maxLength) + '...'
-                        : e.target.value;
-                      setSearchQuery(truncatedValue);
-                      e.target.style.height = 'auto';
-                      e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
-                    }}
-                    placeholder="Ask a question..."
-                    className={cn(
-                      "flex-grow resize-none min-h-[40px] max-h-[100px]",
-                      "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
-                      "py-2 px-3",
-                      "text-base text-center",
-                      "overflow-hidden text-ellipsis" // Added these classes
-                    )}
-                    rows={1}
-                    style={{ 
-                      lineHeight: '20px',
-                      whiteSpace: 'nowrap',  // Added this style
-                      overflow: 'hidden',    // Added this style
-                      textOverflow: 'ellipsis' // Added this style
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSearch(e);
-                      }
-                    }}
-                  />
-                  <Button
-                    type="submit"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 rounded-r-xl"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? (
-                      <span className="animate-spin">⌛</span>
-                    ) : (
-                      <ArrowRight className="h-4 w-4" />
-                    )}
-                  </Button>
-                </form>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1162,7 +925,7 @@ const styles = `
 
 // Add the styles to the document
 const styleSheet = document.createElement("style");
-styleSheet.innerText = styles;
+styleSheet.innerText = styles + watermarkStyles;  // Combine both style blocks
 document.head.appendChild(styleSheet);
 
 // Update handleSectionChange to work for both initial and ongoing conversations
