@@ -11,9 +11,10 @@ import { Textarea } from "./components/ui/textarea";
 
 // Function to extract YouTube video ID from URL
 const getYoutubeVideoIds = (urls) => {
-  if (!urls || urls.length === 0) return [];
+  if (!urls || !Array.isArray(urls) || urls.length === 0) return [];
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
   return urls.map(url => {
+    if (!url || typeof url !== 'string') return null;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
   }).filter(id => id !== null);
@@ -407,13 +408,20 @@ export default function Chat({ isVisible }) {
   const [currentTags, setCurrentTags] = useState([]);
   const renderVideos = (videos, videoLinks) => {
     let videoIds = new Set();
-    if (videos && videos.length > 0) {
+
+    // Handle direct video URLs
+    if (Array.isArray(videos)) {
       getYoutubeVideoIds(videos).forEach(id => videoIds.add(id));
     }
-    if (videoLinks) {
-      Object.values(videoLinks).flat().forEach(url => {
-        const id = getYoutubeVideoIds([url])[0];
-        if (id) videoIds.add(id);
+
+    // Handle video links object with new structure
+    if (videoLinks && typeof videoLinks === 'object') {
+      Object.values(videoLinks).forEach(videoInfo => {
+        if (videoInfo && Array.isArray(videoInfo.urls)) {
+          getYoutubeVideoIds(videoInfo.urls).forEach(id => {
+            if (id) videoIds.add(id);
+          });
+        }
       });
     }
 
