@@ -253,7 +253,7 @@ export default function Chat({ isVisible }) {
         selected_index: selectedIndex,
         chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
       }, {
-        timeout: 60000
+        timeout: 300000
       });
       
       // Store conversation with related products
