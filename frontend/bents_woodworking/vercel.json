@@ -12,10 +12,5 @@
       "src": "/shop",
       "dest": "/"
     }
-  ],
-  "functions": {
-    "frontend/bents_woodworking/src/Chat.jsx": {
-      "maxDuration": 300
-    }
-  }
+  ]
 }
