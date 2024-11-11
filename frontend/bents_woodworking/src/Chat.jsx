@@ -804,13 +804,18 @@ export default function Chat({ isVisible }) {
       {renderSidebar()}
       <div className="relative flex-grow overflow-hidden">
         <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="fixed top-[85px] left-4 z-30 bg-white px-3 py-2 rounded-full shadow-md 
-            hover:bg-gray-100 transition-colors duration-200 flex items-center space-x-2
-            md:px-4 md:left-4 sm:left-2 sm:px-2"
+          onClick={() => {
+            setIsSidebarOpen(true);
+            const btn = document.querySelector('.history-button');
+            btn.classList.add('active');
+            setTimeout(() => btn.classList.remove('active'), 300);
+          }}
+          className={cn(
+            "history-button",
+            currentConversation.length > 0 ? "flex" : "hidden"
+          )}
         >
-          <BookOpen size={20} className="sm:w-4 sm:h-4 md:w-5 md:h-5" />
-          <span className="font-medium sm:text-sm md:text-base">History</span>
+          <BookOpen className="history-icon" />
         </button>
         
         <div className="h-full overflow-y-auto p-4 pt-16 pb-24">
@@ -818,8 +823,14 @@ export default function Chat({ isVisible }) {
           
           {/* Only show top search bar when no conversations exist */}
           {currentConversation.length === 0 && (
-            <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] w-full max-w-2xl mx-auto px-4">
-              <div className="space-y-8">
+            <div className={cn(
+              "flex flex-col items-center justify-center w-full max-w-2xl mx-auto px-4",
+              // Remove min-height when loading or when not showing initial questions
+              showInitialQuestions && !isLoading 
+                ? "min-h-[calc(100vh-200px)]" 
+                : "min-h-0 py-8" // Add some padding instead of full height
+            )}>
+              <div className="space-y-8 w-full">
                 <div className="w-full">
                   <div className="flex items-center justify-center w-full">
                     {renderSearchBar()}
@@ -846,9 +857,8 @@ export default function Chat({ isVisible }) {
                           className="w-full p-4 text-left"
                           disabled={isSearching || isLoading}
                         >
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center">
                             <span className="text-sm text-gray-900">{question}</span>
-                            <ArrowRight className="h-4 w-4 text-gray-500" />
                           </div>
                         </button>
                       </div>
@@ -861,10 +871,10 @@ export default function Chat({ isVisible }) {
 
           {/* Conversations */}
           {currentConversation.length > 0 && (
-            <div className="space-y-4 pb-[180px]">
+            <div className="space-y-4 pb-[100px]"> {/* Reduced bottom padding */}
               {currentConversation.map((conv, index) => renderConversation(conv, index))}
               
-              {/* Loading state - moved here, above the fixed search bar but below conversations */}
+              {/* Loading state */}
               {isLoading && (
                 <div className="w-full max-w-xl mx-auto px-4">
                   {renderLoadingFact()}
@@ -875,8 +885,7 @@ export default function Chat({ isVisible }) {
 
           {/* Fixed bottom search bar when conversations exist */}
           {currentConversation.length > 0 && (
-            <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
-              {/* Search bar */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-10"> {/* Added z-index */}
               <div className="flex justify-center w-full px-4 py-4">
                 <div className="w-full max-w-xl">
                   {renderSearchBar()}
@@ -937,6 +946,45 @@ const styles = `
   textarea::-webkit-scrollbar-thumb {
     background-color: rgba(0, 0, 0, 0.2);
     border-radius: 3px;
+  }
+
+  @keyframes pulseScale {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+  }
+
+  .history-button {
+    transition: all 0.3s ease;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 85px;
+    left: 16px;
+    z-index: 30;
+    background-color: white;
+    border-radius: 9999px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  .history-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .history-button:hover {
+    background-color: #f8f9fa;
+  }
+
+  .history-button.active {
+    animation: pulseScale 0.3s ease;
+  }
+
+  .history-button.active .history-icon {
+    transform: rotate(-10deg);
   }
 `;
 
