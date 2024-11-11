@@ -2,18 +2,20 @@
   "routes": [
     {
       "src": "/",
-      "dest": "/",
-      "maxDuration": 300
+      "dest": "/"
     },
     {
       "src": "/chat",
-      "dest": "/",
-      "maxDuration": 300
+      "dest": "/"
     },
     {
       "src": "/shop",
-      "dest": "/",
+      "dest": "/"
+    }
+  ],
+  "functions": {
+    "src/Chat.jsx": {
       "maxDuration": 300
     }
-  ]
+  }
 }
