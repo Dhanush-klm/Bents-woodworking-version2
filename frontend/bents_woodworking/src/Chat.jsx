@@ -70,7 +70,7 @@ const watermarkStyles = `
     z-index: 0;
   }
 `;
-export const maxDuration = 300;
+
 export default function Chat({ isVisible }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
@@ -253,7 +253,7 @@ export default function Chat({ isVisible }) {
         selected_index: selectedIndex,
         chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
       }, {
-        timeout: 300000
+        timeout: 60000
       });
       
       // Store conversation with related products
@@ -704,77 +704,86 @@ export default function Chat({ isVisible }) {
     );
   };
 
-  const renderConversation = (conv, index) => (
-    <div 
-      key={index} 
-      className={cn(
-        "bg-white p-4 shadow mb-4 ml-0 sm:ml-[60px] md:ml-[120px]",
-        "rounded-[2rem]"
-      )}
-      ref={index === currentConversation.length - 1 ? latestConversationRef : null}
-    >
-      <h2 className="text-xl font-bold mb-4">{conv.question}</h2>
+  // Group videos by title function
+  const groupVideosByTitle = (videoLinks) => {
+    if (!videoLinks) return {};
+    
+    const groupedVideos = {};
+    Object.entries(videoLinks).forEach(([key, info]) => {
+      if (!info || !info.video_title) return;
       
-      {/* Products Carousel - Show for all conversations */}
-      {conv.related_products && conv.related_products.length > 0 && (
-        <div className="mb-6">
-          <div className="overflow-x-auto custom-scrollbar">
-            <div className="flex gap-3 pb-2 px-1">
-              {conv.related_products.map((product, idx) => (
-                <a
-                  key={idx}
-                  href={product.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-shrink-0 w-44 p-3 border rounded-lg hover:bg-gray-50 transition-all duration-200 
-                           shadow-sm hover:shadow-md transform hover:-translate-y-0.5 bg-white"
-                >
-                  <span className="text-gray-900 hover:text-gray-700 line-clamp-2 text-sm font-medium">
-                    {product.title}
-                  </span>
-                </a>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      const title = info.video_title;
+      if (!groupedVideos[title]) {
+        groupedVideos[title] = [];
+      }
+      groupedVideos[title].push(info);
+    });
+    
+    return groupedVideos;
+  };
 
-      {/* Video Players */}
-      <div className="mb-4 text-base">
-        {renderVideos(conv.video, conv.videoLinks)}
-        {formatResponse(conv.text || '', conv.videoLinks)}
-      </div>
+  // Updated renderSourceVideos function
+  const renderSourceVideos = (videoLinks) => {
+    if (!videoLinks || Object.keys(videoLinks).length === 0) return null;
 
-      {/* Source Videos Section - Show for all conversations */}
+    const groupedVideos = groupVideosByTitle(videoLinks);
+
+    return (
       <div className="mt-4 border-t pt-4">
-        <h3 className="text-xl font-semibold mb-3">Recommended Videos</h3>
-        <div className="border rounded-lg p-4">
-          <h4 className="text-lg font-medium text-gray-800 mb-3">Source</h4>
-          <div className="space-y-2">
-            {conv.video && conv.video.map((url, idx) => (
-              <div key={idx} className="flex flex-col">
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-blue-600 group-hover:text-blue-800">
-                      {conv.video_titles?.[idx] || 'Video'}
-                    </span>
-                    {conv.video_timestamps?.[idx] && (
-                      <span className="text-sm text-gray-500 mt-1">
-                        timestamp at: {conv.video_timestamps[idx].toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-                </a>
+        <h3 className="text-xl font-semibold mb-4">Recommended Videos</h3>
+        <div className="border rounded-lg p-6 bg-white">
+          <h4 className="text-base mb-4">Source</h4>
+          <div className="space-y-6">
+            {Object.entries(groupedVideos).map(([title, videos], idx) => (
+              <div key={idx} className="space-y-2">
+                <h5 className="text-base font-medium text-gray-900">
+                  {title}
+                </h5>
+                <div className="ml-4 space-y-3">
+                  {videos.map((video, i) => (
+                    <div key={i} className="space-y-1">
+                      <a
+                        href={video.urls?.[0] || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 block"
+                      >
+                        {video.description}
+                      </a>
+                      {video.timestamp && (
+                        <div className="text-gray-600 text-sm">
+                          Timestamp: {video.timestamp}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
         </div>
       </div>
+    );
+  };
+
+  // Update the renderConversation function
+  const renderConversation = (conv, index) => (
+    <div 
+      key={index} 
+      className="bg-white p-4 rounded-lg shadow mb-4"
+      ref={index === currentConversation.length - 1 ? latestConversationRef : null}
+    >
+      <h2 className="font-bold mb-4">{conv.question}</h2>
+      
+      {/* Video Players */}
+      <div className="mb-4">
+        {renderVideos(conv.video, conv.videoLinks)}
+        {formatResponse(conv.text || '', conv.videoLinks)}
+      </div>
+
+      {/* Source Videos Section */}
+      {renderSourceVideos(conv.videoLinks)}
+      
       <div className="clear-both"></div>
     </div>
   );
