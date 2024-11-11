@@ -14,7 +14,7 @@
     }
   ],
   "functions": {
-    "src/Chat.jsx": {
+    "frontend/bents_woodworking/src/Chat.jsx": {
       "maxDuration": 300
     }
   }
