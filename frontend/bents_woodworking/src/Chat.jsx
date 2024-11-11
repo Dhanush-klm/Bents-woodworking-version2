@@ -253,7 +253,7 @@ export default function Chat({ isVisible }) {
         selected_index: selectedIndex,
         chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
       }, {
-        timeout: 60000
+        timeout: 300000
       });
       
       // Store conversation with related products
@@ -559,30 +559,27 @@ export default function Chat({ isVisible }) {
           <Textarea
             value={searchQuery}
             onChange={(e) => {
-              const maxLength = 100;
-              const truncatedValue = e.target.value.length > maxLength 
-                ? e.target.value.substring(0, maxLength) + '...'
-                : e.target.value;
-              setSearchQuery(truncatedValue);
-              e.target.style.height = 'auto';
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
+              setSearchQuery(e.target.value);
+              // Remove auto-height adjustment since we want fixed height
             }}
             placeholder="Ask a question..."
             className={cn(
-              "flex-grow resize-none min-h-[40px] max-h-[100px]",
+              "flex-grow resize-none h-[40px]",
               "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
               "py-2 px-3",
               "text-base text-center",
-              "overflow-hidden text-ellipsis",
+              "overflow-x-auto", // Enable horizontal scroll
+              "overflow-y-hidden", // Hide vertical scroll
+              "whitespace-nowrap", // Prevent text wrapping
               isLoading && currentConversation.length === 0 ? "opacity-50" : ""
             )}
-            disabled={isLoading}
+            disabled={false}
             rows={1}
             style={{ 
               lineHeight: '20px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              whiteSpace: 'nowrap'
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -933,10 +930,15 @@ const styles = `
     font-family: inherit;
     font-size: inherit;
     line-height: 1.5;
+    overflow-x: auto;  /* Enable horizontal scrolling */
+    overflow-y: hidden; /* Hide vertical scrollbar */
+    white-space: nowrap; /* Prevent text wrapping */
   }
 
+  /* Hide default scrollbar */
   textarea::-webkit-scrollbar {
-    width: 6px;
+    height: 6px;  /* Changed from width to height for horizontal scrollbar */
+    width: 0;     /* Hide vertical scrollbar */
   }
 
   textarea::-webkit-scrollbar-track {
@@ -946,6 +948,19 @@ const styles = `
   textarea::-webkit-scrollbar-thumb {
     background-color: rgba(0, 0, 0, 0.2);
     border-radius: 3px;
+  }
+
+  /* For Firefox */
+  textarea {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  }
+
+  /* Ensure the textarea doesn't grow vertically */
+  textarea {
+    resize: none;
+    max-height: 40px;
+    min-height: 40px;
   }
 
   @keyframes pulseScale {
