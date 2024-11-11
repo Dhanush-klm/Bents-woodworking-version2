@@ -731,7 +731,7 @@ export default function Chat({ isVisible }) {
     return (
       <div className="mt-4 border-t pt-4">
         <h3 className="text-xl font-semibold mb-4">Recommended Videos</h3>
-        <div className="border rounded-lg p-6 bg-white">
+        <div className="border rounded-[1.5rem] p-6 bg-white">
           <h4 className="text-base mb-4">Source</h4>
           <div className="space-y-6">
             {Object.entries(groupedVideos).map(([title, videos], idx) => (
@@ -770,7 +770,7 @@ export default function Chat({ isVisible }) {
   const renderConversation = (conv, index) => (
     <div 
       key={index} 
-      className="bg-white p-4 rounded-lg shadow mb-4"
+      className="bg-white p-6 rounded-[2rem] shadow mb-4"
       ref={index === currentConversation.length - 1 ? latestConversationRef : null}
     >
       <h2 className="font-bold mb-4">{conv.question}</h2>
