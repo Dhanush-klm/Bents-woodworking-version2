@@ -35,7 +35,7 @@ class LLMNoResponseError(LLMResponseError):
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002"]}})
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002","https://bents-llm-server.vercel.app"]}})
 
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
