@@ -20,7 +20,6 @@ from psycopg2.extras import RealDictCursor
 import base64
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 import time
-import json
 
 
 class LLMResponseError(Exception):
@@ -35,7 +34,11 @@ class LLMNoResponseError(LLMResponseError):
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002","https://bents-next.vercel.app"]}})
+CORS(app, resources={r"/*": {"origins": [
+    "https://bents-backend-server.vercel.app",
+    "https://bents-frontend-server.vercel.app",
+    "https://bents-next.vercel.app"
+]}})
 
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
@@ -103,26 +106,19 @@ for INDEX_NAME in TRANSCRIPT_INDEX_NAMES + [PRODUCT_INDEX_NAME]:
 transcript_vector_stores = {name: PineconeVectorStore(index=pc.Index(name), embedding=embeddings, text_key="text") for name in TRANSCRIPT_INDEX_NAMES}
 product_vector_store = PineconeVectorStore(index=pc.Index(PRODUCT_INDEX_NAME), embedding=embeddings, text_key="tags")
 
-# System instructions
 SYSTEM_INSTRUCTIONS = """You are an AI assistant specialized in information retrieval from text documents.
         Always provide your responses in English, regardless of the language of the input or context.
         When given a document and a query:
         1. Analyze the document content and create an efficient index of key terms, concepts, and their locations within the text.
         2. When a query is received, use the index to quickly locate relevant sections of the document.
         3. Extract the most relevant information from those sections to form a concise and accurate answer.
-        4. Always include the exact relevant content from the document, starting from the beginning of the relevant section. Use quotation marks to denote direct quotes.
-        5. If applicable, provide a timestamp or location reference for where the information was found in the original document.
-        6. After providing the direct quote, summarize or explain the answer if necessary.
-        7. If the query cannot be answered from the given document, state this clearly.
-        8. Always prioritize accuracy over speed. If you're not certain about an answer, say so.
-        9. For multi-part queries, address each part separately and clearly.
-        10. Aim to provide responses within seconds, even for large documents.
-        11. please only Provide the timestamp for where the information was found in the original video. must Use the format {{timestamp:MM:SS}} for timestamps under an hour, and {{timestamp:HH:MM:SS}} for longer videos.
-        12. Do not include any URLs in your response. Just provide the timestamps in the specified format.
-        13. When referencing timestamps that may be inaccurate, you can use language like "around", "approximately", or "in the vicinity of" to indicate that the exact moment may vary slightly.
+        4. When quoting from the source, simply include the quote without any video references or timestamps.
+        5. Format responses in a clear, structured way using bullet points or numbers when listing items.
+        6. Always prioritize accuracy over speed. If you're not certain about an answer, say so.
+        7. For multi-part queries, address each part separately and clearly.
         Remember, always respond in English, even if the query or context is in another language.
-        Always represent the speaker as Jason bent.You are an assistant expert representing Jason Bent as jason bent on woodworking response. Answer questions based on the provided context. The context includes timestamps in the format [Timestamp: HH:MM:SS]. When referencing information, include these timestamps in the format {{timestamp:HH:MM:SS}}.
-Then show that is in generated response with the provided context.
+        Always represent the speaker as Jason bent. You are an assistant expert representing Jason Bent on woodworking responses.
+        Important: Do not include any [videoX] references in your responses. Simply state the information directly.
 """
 
 logging.basicConfig(level=logging.DEBUG)
@@ -179,86 +175,19 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def process_answer(answer, urls, source_documents):
-    def extract_context(text, timestamp_pos, window=150):
-        start = max(0, timestamp_pos - window)
-        end = min(len(text), timestamp_pos + window)
-        return text[start:end].strip()
-
-    def generate_description(context, timestamp):
-        description_prompt = f"""
-        Given this woodworking video context at {timestamp}, create an extremely concise action phrase (max 6-8 words).
-
-        Context: {context}
-
-        Rules:
-        1. Start with an action verb
-        2. Name the specific tool/technique
-        3. Must be 6-8 words only
-        4. Focus on the single main action
-        5. Be direct and clear
-
-        Example formats:
-        - "Demonstrates table saw fence alignment technique"
-        - "Installs dust collection system components"
-        - "Shows track saw cutting method"
-
-        Description:"""
-
-        try:
-            enhanced_description = llm.predict(description_prompt).strip()
-            # Take only first 8 words maximum
-            words = enhanced_description.split()[:8]
-            return ' '.join(words)
-        except Exception as e:
-            logging.error(f"Error generating description: {str(e)}")
-            # Fallback to a very short context
-            return ' '.join(context.split()[:6])
-
-    def replace_timestamp(match, source_index, source_documents):
+def process_answer(answer, urls):
+    def replace_timestamp(match):
         timestamp = match.group(1)
-        timestamp_pos = match.start()
-        context = extract_context(answer, timestamp_pos)
-        
-        # Get the correct URL and title for this timestamp
-        current_url = urls[source_index] if source_index < len(urls) else None
-        current_metadata = source_documents[source_index].metadata if source_index < len(source_documents) else {}
-        current_title = current_metadata.get('title', "Unknown Video")
-        
-        enhanced_description = generate_description(context, timestamp)
-        
-        full_urls = [combine_url_and_timestamp(current_url, timestamp)] if current_url else []
-        
-        return {
-            'links': full_urls,
-            'timestamp': timestamp,
-            'description': enhanced_description,
-            'video_title': current_title  # Now using the correct title from metadata
-        }
+        full_urls = [combine_url_and_timestamp(url, timestamp) for url in urls if url]
+        return f"[video]({','.join(full_urls)})"
     
-    # Find all timestamps and their contexts
-    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
-    timestamps_with_context = [
-        replace_timestamp(match, i, source_documents) 
-        for i, match in enumerate(timestamp_matches)
-    ]
+    processed_answer = re.sub(r'\{timestamp:([^\}]+)\}', replace_timestamp, answer)
     
-    # Create enhanced video dictionary
-    video_dict = {
-        f'[video{i}]': {
-            'urls': entry['links'],
-            'timestamp': entry['timestamp'],
-            'description': entry['description'],
-            'video_title': entry['video_title']
-        }
-        for i, entry in enumerate(timestamps_with_context)
-    }
+    video_links = re.findall(r'\[video\]\(([^\)]+)\)', processed_answer)
+    video_dict = {f'[video{i}]': link.split(',') for i, link in enumerate(video_links)}
     
-    # Replace timestamps in the answer with placeholders
-    processed_answer = answer
-    for i, match in enumerate(timestamp_matches):
-        placeholder = f'[video{i}]'
-        processed_answer = processed_answer.replace(match.group(0), placeholder)
+    for i, (placeholder, links) in enumerate(video_dict.items()):
+        processed_answer = processed_answer.replace(f'[video]({",".join(links)})', placeholder)
     
     return processed_answer, video_dict
 
@@ -296,7 +225,6 @@ def upsert_transcript(transcript_text, metadata, index_name):
         chunk_metadata = metadata.copy()
         chunk_metadata['chunk_id'] = f"{metadata['title']}_chunk_{i}"
         chunk_metadata['url'] = metadata.get('url', '')
-        chunk_metadata['title'] = metadata.get('title', 'Unknown Video')
         documents.append(LangchainDocument(page_content=chunk, metadata=chunk_metadata))
     
     transcript_vector_stores[index_name].add_documents(documents)
@@ -416,37 +344,28 @@ def chat():
             return jsonify({'error': 'An unexpected error occurred while processing your request.'}), 500
         
         initial_answer = result['answer']
-        contexts = [doc.page_content for doc in result['source_documents']]
         source_documents = result['source_documents']
 
-        # Extract video titles and URLs from all source documents
-        video_titles = []
-        urls = []
+        # Extract source information with timestamps
+        sources = []
         for doc in source_documents:
-            metadata = doc.metadata
-            video_titles.append(metadata.get('title', "Unknown Video"))
-            urls.append(metadata.get('url', None))
-
-        logging.debug(f"Extracted video titles: {video_titles}")
-        logging.debug(f"Extracted URLs: {urls}")
-
-        processed_answer, video_dict = process_answer(initial_answer, urls, source_documents)
-        logging.debug(f"Processed answer: {processed_answer}")
-
-        related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
-        logging.debug(f"Retrieved matched products: {related_products}")
+            timestamp_match = re.search(r'\[Timestamp: (\d{2}:\d{2}(?::\d{2})?)\]', doc.page_content)
+            timestamp = timestamp_match.group(1) if timestamp_match else None
+            
+            sources.append({
+                'title': doc.metadata.get('title', 'Unknown Video'),
+                'quote': doc.page_content.split('.')[0] + '.',  # First sentence as quote
+                'timestamp': timestamp,
+                'url': doc.metadata.get('url', '')
+            })
 
         response_data = {
-            'response': processed_answer,
-            'initial_answer': initial_answer,
-            'related_products': related_products,
-            'urls': urls,
-            'contexts': contexts,
-            'video_links': video_dict,
-            'video_titles': video_titles
+            'response': initial_answer,
+            'related_products': get_matched_products(sources[0]['title'] if sources else "Unknown Video"),
+            'sources': sources,
+            'contexts': [doc.page_content for doc in source_documents],
+            'video_titles': [source['title'] for source in sources]
         }
-
-        logging.debug(f"Response data: {response_data}")
 
         return jsonify(response_data)
     except Exception as e:
