@@ -102,12 +102,12 @@ export default function Section1() {
             Your AI-powered companion for all things woodworking. Get expert advice, tool recommendations, and shop improvement tips.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Link to="/chat" className="inline-block bg-[rgba(23,155,215,255)] text-black font-semibold py-3 px-6 rounded-lg hover:bg-[rgba(20,139,193,255)] transition duration-300">
-              Start Chatting
-            </Link>
-            <Link to="/shop" className="inline-block bg-black text-white font-semibold py-3 px-6 rounded-lg border-2 border-white hover:bg-white hover:text-black transition duration-300">
-              Shop Now
-            </Link>
+<Link to="/chat" className="inline-block bg-[rgba(23,155,215,255)] text-black font-semibold py-3 px-6 w-48 rounded-full hover:bg-[rgba(20,139,193,255)] transition duration-300">
+  Start Chatting
+</Link>
+<Link to="/shop" className="inline-block bg-black text-white font-semibold py-3 px-6 w-48 rounded-full border-2 border-white hover:bg-white hover:text-black transition duration-300">
+  Shop Now
+</Link>
           </div>
         </div>
       </section>
@@ -221,7 +221,7 @@ export default function Section1() {
             )}
             <button
               type="submit"
-              className="w-full bg-black text-white font-semibold py-2 px-4 rounded-md hover:bg-gray-800 transition duration-300"
+              className="w-full bg-black text-white font-semibold py-2 px-4 rounded-full hover:bg-gray-800 transition duration-300"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Sending...' : 'Send Message'}
