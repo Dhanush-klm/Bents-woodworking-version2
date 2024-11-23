@@ -106,19 +106,26 @@ for INDEX_NAME in TRANSCRIPT_INDEX_NAMES + [PRODUCT_INDEX_NAME]:
 transcript_vector_stores = {name: PineconeVectorStore(index=pc.Index(name), embedding=embeddings, text_key="text") for name in TRANSCRIPT_INDEX_NAMES}
 product_vector_store = PineconeVectorStore(index=pc.Index(PRODUCT_INDEX_NAME), embedding=embeddings, text_key="tags")
 
+# System instructions
 SYSTEM_INSTRUCTIONS = """You are an AI assistant specialized in information retrieval from text documents.
         Always provide your responses in English, regardless of the language of the input or context.
         When given a document and a query:
         1. Analyze the document content and create an efficient index of key terms, concepts, and their locations within the text.
         2. When a query is received, use the index to quickly locate relevant sections of the document.
         3. Extract the most relevant information from those sections to form a concise and accurate answer.
-        4. When quoting from the source, simply include the quote without any video references or timestamps.
-        5. Format responses in a clear, structured way using bullet points or numbers when listing items.
-        6. Always prioritize accuracy over speed. If you're not certain about an answer, say so.
-        7. For multi-part queries, address each part separately and clearly.
+        4. Always include the exact relevant content from the document, starting from the beginning of the relevant section. Use quotation marks to denote direct quotes.
+        5. If applicable, provide a timestamp or location reference for where the information was found in the original document.
+        6. After providing the direct quote, summarize or explain the answer if necessary.
+        7. If the query cannot be answered from the given document, state this clearly.
+        8. Always prioritize accuracy over speed. If you're not certain about an answer, say so.
+        9. For multi-part queries, address each part separately and clearly.
+        10. Aim to provide responses within seconds, even for large documents.
+        11. please only Provide the timestamp for where the information was found in the original video. must Use the format {{timestamp:MM:SS}} for timestamps under an hour, and {{timestamp:HH:MM:SS}} for longer videos.
+        12. Do not include any URLs in your response. Just provide the timestamps in the specified format.
+        13. When referencing timestamps that may be inaccurate, you can use language like "around", "approximately", or "in the vicinity of" to indicate that the exact moment may vary slightly.
         Remember, always respond in English, even if the query or context is in another language.
-        Always represent the speaker as Jason bent. You are an assistant expert representing Jason Bent on woodworking responses.
-        Important: Do not include any [videoX] references in your responses. Simply state the information directly.
+        Always represent the speaker as Jason bent.You are an assistant expert representing Jason Bent as jason bent on woodworking response. Answer questions based on the provided context. The context includes timestamps in the format [Timestamp: HH:MM:SS]. When referencing information, include these timestamps in the format {{timestamp:HH:MM:SS}}.
+Then show that is in generated response with the provided context.
 """
 
 logging.basicConfig(level=logging.DEBUG)
@@ -176,18 +183,20 @@ def verify_database():
         return False
 
 def process_answer(answer, urls):
-    def replace_timestamp(match):
-        timestamp = match.group(1)
-        full_urls = [combine_url_and_timestamp(url, timestamp) for url in urls if url]
-        return f"[video]({','.join(full_urls)})"
+    # First, store the timestamp information without modifying the answer
+    timestamps = re.findall(r'\{timestamp:([^\}]+)\}', answer)
     
-    processed_answer = re.sub(r'\{timestamp:([^\}]+)\}', replace_timestamp, answer)
+    # Remove the timestamp markup completely from the answer
+    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
     
-    video_links = re.findall(r'\[video\]\(([^\)]+)\)', processed_answer)
-    video_dict = {f'[video{i}]': link.split(',') for i, link in enumerate(video_links)}
-    
-    for i, (placeholder, links) in enumerate(video_dict.items()):
-        processed_answer = processed_answer.replace(f'[video]({",".join(links)})', placeholder)
+    # Create video_dict for source cards only
+    video_dict = {}
+    if timestamps and urls:
+        video_dict = {
+            f'video{i}': [combine_url_and_timestamp(url, timestamp) 
+                         for url in urls if url]
+            for i, timestamp in enumerate(timestamps)
+        }
     
     return processed_answer, video_dict
 
@@ -344,28 +353,37 @@ def chat():
             return jsonify({'error': 'An unexpected error occurred while processing your request.'}), 500
         
         initial_answer = result['answer']
+        contexts = [doc.page_content for doc in result['source_documents']]
         source_documents = result['source_documents']
 
-        # Extract source information with timestamps
-        sources = []
+        # Extract video titles and URLs from all source documents
+        video_titles = []
+        urls = []
         for doc in source_documents:
-            timestamp_match = re.search(r'\[Timestamp: (\d{2}:\d{2}(?::\d{2})?)\]', doc.page_content)
-            timestamp = timestamp_match.group(1) if timestamp_match else None
-            
-            sources.append({
-                'title': doc.metadata.get('title', 'Unknown Video'),
-                'quote': doc.page_content.split('.')[0] + '.',  # First sentence as quote
-                'timestamp': timestamp,
-                'url': doc.metadata.get('url', '')
-            })
+            metadata = doc.metadata
+            video_titles.append(metadata.get('title', "Unknown Video"))
+            urls.append(metadata.get('url', None))
+
+        logging.debug(f"Extracted video titles: {video_titles}")
+        logging.debug(f"Extracted URLs: {urls}")
+
+        processed_answer, video_dict = process_answer(initial_answer, urls)
+        logging.debug(f"Processed answer: {processed_answer}")
+
+        related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
+        logging.debug(f"Retrieved matched products: {related_products}")
 
         response_data = {
-            'response': initial_answer,
-            'related_products': get_matched_products(sources[0]['title'] if sources else "Unknown Video"),
-            'sources': sources,
-            'contexts': [doc.page_content for doc in source_documents],
-            'video_titles': [source['title'] for source in sources]
+            'response': processed_answer,
+            'initial_answer': initial_answer,
+            'related_products': related_products,
+            'urls': urls,
+            'contexts': contexts,
+            'video_links': video_dict,
+            'video_titles': video_titles
         }
+
+        logging.debug(f"Response data: {response_data}")
 
         return jsonify(response_data)
     except Exception as e:
