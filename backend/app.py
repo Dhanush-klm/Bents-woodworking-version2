@@ -183,18 +183,20 @@ def verify_database():
         return False
 
 def process_answer(answer, urls):
-    def replace_timestamp(match):
-        timestamp = match.group(1)
-        full_urls = [combine_url_and_timestamp(url, timestamp) for url in urls if url]
-        return f"[video]({','.join(full_urls)})"
+    # First, store the timestamp information without modifying the answer
+    timestamps = re.findall(r'\{timestamp:([^\}]+)\}', answer)
     
-    processed_answer = re.sub(r'\{timestamp:([^\}]+)\}', replace_timestamp, answer)
+    # Remove the timestamp markup completely from the answer
+    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
     
-    video_links = re.findall(r'\[video\]\(([^\)]+)\)', processed_answer)
-    video_dict = {f'[video{i}]': link.split(',') for i, link in enumerate(video_links)}
-    
-    for i, (placeholder, links) in enumerate(video_dict.items()):
-        processed_answer = processed_answer.replace(f'[video]({",".join(links)})', placeholder)
+    # Create video_dict for source cards only
+    video_dict = {}
+    if timestamps and urls:
+        video_dict = {
+            f'video{i}': [combine_url_and_timestamp(url, timestamp) 
+                         for url in urls if url]
+            for i, timestamp in enumerate(timestamps)
+        }
     
     return processed_answer, video_dict
 
