@@ -183,41 +183,31 @@ def verify_database():
         return False
 
 def process_answer(answer, source_documents):
-    # Find all timestamps and their contexts
-    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
+    # First, clean the answer by removing all [videoX] markers
+    processed_answer = re.sub(r'\[video\d+\]', '', answer)
+    
+    # Store timestamp information for source cards
     timestamps_with_context = []
+    for i, doc in enumerate(source_documents):
+        timestamps_with_context.append({
+            'timestamp': doc.metadata.get('timestamp', ''),
+            'context': doc.page_content,
+            'links': [doc.metadata.get('url', '')],
+            'video_title': doc.metadata.get('title', ''),
+            'description': doc.page_content
+        })
     
-    for i, match in enumerate(timestamp_matches):
-        timestamp = match.group(1)
-        # Get the surrounding context (e.g., 100 characters before and after)
-        start = max(0, match.start() - 100)
-        end = min(len(answer), match.end() + 100)
-        context = answer[start:end].strip()
-        
-        # Get video information from source documents
-        if i < len(source_documents):
-            doc = source_documents[i]
-            timestamps_with_context.append({
-                'timestamp': timestamp,
-                'context': context,
-                'links': [doc.metadata.get('url', '')],
-                'video_title': doc.metadata.get('title', 'Unknown Video'),
-                'description': context
-            })
-    
-    # Create source cards dictionary
-    source_cards = {
-        f'source_{i}': {
-            'urls': entry['links'],
+    # Create source cards
+    source_cards = {}
+    for i, entry in enumerate(timestamps_with_context):
+        source_cards[entry['video_title']] = {
             'timestamp': entry['timestamp'],
-            'description': entry['description'],
+            'context': entry['context'],
+            'url': entry['links'][0] if entry['links'] else '',
             'video_title': entry['video_title']
         }
-        for i, entry in enumerate(timestamps_with_context)
-    }
     
-    # Remove timestamp markup from the answer
-    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
+    # Clean up any extra spaces and format numbering
     processed_answer = ' '.join(processed_answer.split())
     
     return processed_answer, source_cards
