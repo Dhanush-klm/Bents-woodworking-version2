@@ -182,35 +182,21 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def process_answer(answer, source_documents):
-    # First, clean the answer by removing all [videoX] markers
-    processed_answer = re.sub(r'\[video\d+\]', '', answer)
+def process_answer(answer, urls):
+    def replace_timestamp(match):
+        timestamp = match.group(1)
+        full_urls = [combine_url_and_timestamp(url, timestamp) for url in urls if url]
+        return f"[video]({','.join(full_urls)})"
     
-    # Store timestamp information for source cards
-    timestamps_with_context = []
-    for i, doc in enumerate(source_documents):
-        timestamps_with_context.append({
-            'timestamp': doc.metadata.get('timestamp', ''),
-            'context': doc.page_content,
-            'links': [doc.metadata.get('url', '')],
-            'video_title': doc.metadata.get('title', ''),
-            'description': doc.page_content
-        })
+    processed_answer = re.sub(r'\{timestamp:([^\}]+)\}', replace_timestamp, answer)
     
-    # Create source cards
-    source_cards = {}
-    for i, entry in enumerate(timestamps_with_context):
-        source_cards[entry['video_title']] = {
-            'timestamp': entry['timestamp'],
-            'context': entry['context'],
-            'url': entry['links'][0] if entry['links'] else '',
-            'video_title': entry['video_title']
-        }
+    video_links = re.findall(r'\[video\]\(([^\)]+)\)', processed_answer)
+    video_dict = {f'[video{i}]': link.split(',') for i, link in enumerate(video_links)}
     
-    # Clean up any extra spaces and format numbering
-    processed_answer = ' '.join(processed_answer.split())
+    for i, (placeholder, links) in enumerate(video_dict.items()):
+        processed_answer = processed_answer.replace(f'[video]({",".join(links)})', placeholder)
     
-    return processed_answer, source_cards
+    return processed_answer, video_dict
 
 def combine_url_and_timestamp(base_url, timestamp):
     parts = timestamp.split(':')
@@ -365,21 +351,30 @@ def chat():
             return jsonify({'error': 'An unexpected error occurred while processing your request.'}), 500
         
         initial_answer = result['answer']
+        contexts = [doc.page_content for doc in result['source_documents']]
         source_documents = result['source_documents']
 
-        # Process answer with source documents
-        processed_answer, video_dict = process_answer(initial_answer, source_documents)
-        
-        # Extract contexts for the response
-        contexts = [doc.page_content for doc in source_documents]
-        
-        # Extract video titles and URLs
-        video_titles = [doc.metadata.get('title', 'Unknown Video') for doc in source_documents]
-        urls = [doc.metadata.get('url', '') for doc in source_documents]
+        # Extract video titles and URLs from all source documents
+        video_titles = []
+        urls = []
+        for doc in source_documents:
+            metadata = doc.metadata
+            video_titles.append(metadata.get('title', "Unknown Video"))
+            urls.append(metadata.get('url', None))
+
+        logging.debug(f"Extracted video titles: {video_titles}")
+        logging.debug(f"Extracted URLs: {urls}")
+
+        processed_answer, video_dict = process_answer(initial_answer, urls)
+        logging.debug(f"Processed answer: {processed_answer}")
+
+        related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
+        logging.debug(f"Retrieved matched products: {related_products}")
 
         response_data = {
             'response': processed_answer,
-            'related_products': get_matched_products(video_titles[0] if video_titles else "Unknown Video"),
+            'initial_answer': initial_answer,
+            'related_products': related_products,
             'urls': urls,
             'contexts': contexts,
             'video_links': video_dict,
