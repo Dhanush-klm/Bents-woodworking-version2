@@ -374,7 +374,7 @@ export default function Chat({ isVisible }) {
         {/* Source Videos Section - unchanged */}
         {currentSourceVideos && currentSourceVideos.length > 0 && (
           <div className="border rounded-lg p-4">
-            <h4 className="font-medium text-gray-800 mb-3">Source</h4>
+            <h4 className="font-bold text-gray-800 mb-3">Source</h4>
             <div className="space-y-3">
               {currentSourceVideos.map((video, index) => (
                 <div key={index} className="flex flex-col">
@@ -382,7 +382,7 @@ export default function Chat({ isVisible }) {
                     href={video.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group"
+                    className="group text-blue-500 underline"
                   >
                     <div className="flex items-start space-x-2">
                       <span className="text-blue-600 group-hover:text-blue-800 flex-grow">
@@ -729,7 +729,7 @@ export default function Chat({ isVisible }) {
       <div className="mt-4 border-t pt-4">
         <h3 className="text-xl font-semibold mb-4">Recommended Videos</h3>
         <div className="border rounded-[1.5rem] p-6 bg-white">
-          <h4 className="text-base mb-4">Source</h4>
+        <h4 className="text-lg mb-4 font-bold">Source</h4>
           <div className="space-y-6">
             {Object.entries(groupedVideos).map(([title, videos], idx) => (
               <div key={idx} className="space-y-2">
@@ -745,7 +745,9 @@ export default function Chat({ isVisible }) {
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:text-blue-800 block"
                       >
-                        {video.description}
+                      
+<span className="font-medium">{video.description.replace(/"/g, '')}</span> 
+
                       </a>
                       {video.timestamp && (
                         <div className="text-gray-600 text-sm">
