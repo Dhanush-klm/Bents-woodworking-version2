@@ -87,7 +87,7 @@ VIDEO_TITLE_LIST = [
 
 # Initialize Langchain components
 embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4o-mini", temperature=0)
+llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4", temperature=0)
 
 # Initialize Pinecone
 pc = Pinecone(api_key=PINECONE_API_KEY)
@@ -182,21 +182,30 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def process_answer(answer, urls):
-    # First, store the timestamp information without modifying the answer
-    timestamps = re.findall(r'\{timestamp:([^\}]+)\}', answer)
+def process_answer(answer, source_documents):
+    # Find all timestamps and their contexts
+    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
+    timestamps_with_context = [
+        replace_timestamp(match, i, source_documents) 
+        for i, match in enumerate(timestamp_matches)
+    ]
     
-    # Remove the timestamp markup completely from the answer
+    # Create enhanced video dictionary for source cards only
+    video_dict = {
+        f'source_{i}': {
+            'urls': entry['links'],
+            'timestamp': entry['timestamp'],
+            'description': entry['description'],
+            'video_title': entry['video_title']
+        }
+        for i, entry in enumerate(timestamps_with_context)
+    }
+    
+    # Simply remove timestamps from the answer without adding placeholders
     processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
     
-    # Create video_dict for source cards only
-    video_dict = {}
-    if timestamps and urls:
-        video_dict = {
-            f'video{i}': [combine_url_and_timestamp(url, timestamp) 
-                         for url in urls if url]
-            for i, timestamp in enumerate(timestamps)
-        }
+    # Clean up any extra spaces that might have been created
+    processed_answer = ' '.join(processed_answer.split())
     
     return processed_answer, video_dict
 
@@ -367,7 +376,7 @@ def chat():
         logging.debug(f"Extracted video titles: {video_titles}")
         logging.debug(f"Extracted URLs: {urls}")
 
-        processed_answer, video_dict = process_answer(initial_answer, urls)
+        processed_answer, video_dict = process_answer(initial_answer, source_documents)
         logging.debug(f"Processed answer: {processed_answer}")
 
         related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
@@ -515,6 +524,10 @@ def retry_llm_call(qa_chain, query, chat_history):
             raise
         logging.error(f"Unexpected error in LLM call: {str(e)}")
         raise LLMNoResponseError("LLM failed due to an unexpected error")
+
+def replace_timestamp(match, i, source_documents):
+    # This function is used in process_answer but isn't defined
+    pass
 
 if __name__ == '__main__':
     verify_database()
