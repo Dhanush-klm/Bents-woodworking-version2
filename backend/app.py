@@ -113,24 +113,19 @@ SYSTEM_INSTRUCTIONS = """You are an AI assistant specialized in information retr
         1. Analyze the document content and create an efficient index of key terms, concepts, and their locations within the text.
         2. When a query is received, use the index to quickly locate relevant sections of the document.
         3. Extract the most relevant information from those sections to form a concise and accurate answer.
-        4. When referencing information from videos, simply state the information directly without using any video markers or timestamps in the main response.
-        5. Do not include [videoX] markers or timestamp references in your main response text.
-        6. Present information in a clear, natural way as if you're having a conversation.
+        4. Always include the exact relevant content from the document, starting from the beginning of the relevant section. Use quotation marks to denote direct quotes.
+        5. If applicable, provide a timestamp or location reference for where the information was found in the original document.
+        6. After providing the direct quote, summarize or explain the answer if necessary.
         7. If the query cannot be answered from the given document, state this clearly.
         8. Always prioritize accuracy over speed. If you're not certain about an answer, say so.
         9. For multi-part queries, address each part separately and clearly.
         10. Aim to provide responses within seconds, even for large documents.
-        11. Do not include any URLs or timestamp references in your main response.
-        12. When providing information from videos, focus on the content itself rather than where it came from.
-
-        Remember:
-        - Never include [videoX] markers in your responses
-        - Don't reference timestamps in the main text
-        - Present information naturally without technical markers
-        - Keep video source information separate from the main response
-
-        Always respond in English, even if the query or context is in another language.
-        Always represent the speaker as Jason Bent. You are an assistant expert representing Jason Bent on woodworking response.
+        11. please only Provide the timestamp for where the information was found in the original video. must Use the format {{timestamp:MM:SS}} for timestamps under an hour, and {{timestamp:HH:MM:SS}} for longer videos.
+        12. Do not include any URLs in your response. Just provide the timestamps in the specified format.
+        13. When referencing timestamps that may be inaccurate, you can use language like "around", "approximately", or "in the vicinity of" to indicate that the exact moment may vary slightly.
+        Remember, always respond in English, even if the query or context is in another language.
+        Always represent the speaker as Jason bent.You are an assistant expert representing Jason Bent as jason bent on woodworking response. Answer questions based on the provided context. The context includes timestamps in the format [Timestamp: HH:MM:SS]. When referencing information, include these timestamps in the format {{timestamp:HH:MM:SS}}.
+Then show that is in generated response with the provided context.
 """
 
 logging.basicConfig(level=logging.DEBUG)
@@ -187,30 +182,19 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def process_answer(answer, source_documents):
-    # Find all timestamps and their contexts
-    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
-    timestamps_with_context = [
-        replace_timestamp(match, i, source_documents) 
-        for i, match in enumerate(timestamp_matches)
-    ]
+def process_answer(answer, urls):
+    def replace_timestamp(match):
+        timestamp = match.group(1)
+        full_urls = [combine_url_and_timestamp(url, timestamp) for url in urls if url]
+        return f"[video]({','.join(full_urls)})"
     
-    # Create enhanced video dictionary for source cards only
-    video_dict = {
-        f'source_{i}': {
-            'urls': entry['links'],
-            'timestamp': entry['timestamp'],
-            'description': entry['description'],
-            'video_title': entry['video_title']
-        }
-        for i, entry in enumerate(timestamps_with_context)
-    }
+    processed_answer = re.sub(r'\{timestamp:([^\}]+)\}', replace_timestamp, answer)
     
-    # Simply remove timestamps from the answer without adding placeholders
-    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
+    video_links = re.findall(r'\[video\]\(([^\)]+)\)', processed_answer)
+    video_dict = {f'[video{i}]': link.split(',') for i, link in enumerate(video_links)}
     
-    # Clean up any extra spaces that might have been created
-    processed_answer = ' '.join(processed_answer.split())
+    for i, (placeholder, links) in enumerate(video_dict.items()):
+        processed_answer = processed_answer.replace(f'[video]({",".join(links)})', placeholder)
     
     return processed_answer, video_dict
 
@@ -381,7 +365,7 @@ def chat():
         logging.debug(f"Extracted video titles: {video_titles}")
         logging.debug(f"Extracted URLs: {urls}")
 
-        processed_answer, video_dict = process_answer(initial_answer, source_documents)
+        processed_answer, video_dict = process_answer(initial_answer, urls)
         logging.debug(f"Processed answer: {processed_answer}")
 
         related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
@@ -529,10 +513,6 @@ def retry_llm_call(qa_chain, query, chat_history):
             raise
         logging.error(f"Unexpected error in LLM call: {str(e)}")
         raise LLMNoResponseError("LLM failed due to an unexpected error")
-
-def replace_timestamp(match, i, source_documents):
-    # This function is used in process_answer but isn't defined
-    pass
 
 if __name__ == '__main__':
     verify_database()
