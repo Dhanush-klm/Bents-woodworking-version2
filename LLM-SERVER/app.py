@@ -182,23 +182,45 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def process_answer(answer, urls):
-    # First, store the timestamp information without modifying the answer
-    timestamps = re.findall(r'\{timestamp:([^\}]+)\}', answer)
+def process_answer(answer, source_documents):
+    # Find all timestamps and their contexts
+    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
+    timestamps_with_context = []
     
-    # Remove the timestamp markup completely from the answer
-    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
+    for i, match in enumerate(timestamp_matches):
+        timestamp = match.group(1)
+        # Get the surrounding context (e.g., 100 characters before and after)
+        start = max(0, match.start() - 100)
+        end = min(len(answer), match.end() + 100)
+        context = answer[start:end].strip()
+        
+        # Get video information from source documents
+        if i < len(source_documents):
+            doc = source_documents[i]
+            timestamps_with_context.append({
+                'timestamp': timestamp,
+                'context': context,
+                'links': [doc.metadata.get('url', '')],
+                'video_title': doc.metadata.get('title', 'Unknown Video'),
+                'description': context
+            })
     
-    # Create video_dict for source cards only
-    video_dict = {}
-    if timestamps and urls:
-        video_dict = {
-            f'video{i}': [combine_url_and_timestamp(url, timestamp) 
-                         for url in urls if url]
-            for i, timestamp in enumerate(timestamps)
+    # Create source cards dictionary
+    source_cards = {
+        f'source_{i}': {
+            'urls': entry['links'],
+            'timestamp': entry['timestamp'],
+            'description': entry['description'],
+            'video_title': entry['video_title']
         }
+        for i, entry in enumerate(timestamps_with_context)
+    }
     
-    return processed_answer, video_dict
+    # Remove timestamp markup from the answer
+    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
+    processed_answer = ' '.join(processed_answer.split())
+    
+    return processed_answer, source_cards
 
 def combine_url_and_timestamp(base_url, timestamp):
     parts = timestamp.split(':')
@@ -353,30 +375,21 @@ def chat():
             return jsonify({'error': 'An unexpected error occurred while processing your request.'}), 500
         
         initial_answer = result['answer']
-        contexts = [doc.page_content for doc in result['source_documents']]
         source_documents = result['source_documents']
 
-        # Extract video titles and URLs from all source documents
-        video_titles = []
-        urls = []
-        for doc in source_documents:
-            metadata = doc.metadata
-            video_titles.append(metadata.get('title', "Unknown Video"))
-            urls.append(metadata.get('url', None))
-
-        logging.debug(f"Extracted video titles: {video_titles}")
-        logging.debug(f"Extracted URLs: {urls}")
-
-        processed_answer, video_dict = process_answer(initial_answer, urls)
-        logging.debug(f"Processed answer: {processed_answer}")
-
-        related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
-        logging.debug(f"Retrieved matched products: {related_products}")
+        # Process answer with source documents
+        processed_answer, video_dict = process_answer(initial_answer, source_documents)
+        
+        # Extract contexts for the response
+        contexts = [doc.page_content for doc in source_documents]
+        
+        # Extract video titles and URLs
+        video_titles = [doc.metadata.get('title', 'Unknown Video') for doc in source_documents]
+        urls = [doc.metadata.get('url', '') for doc in source_documents]
 
         response_data = {
             'response': processed_answer,
-            'initial_answer': initial_answer,
-            'related_products': related_products,
+            'related_products': get_matched_products(video_titles[0] if video_titles else "Unknown Video"),
             'urls': urls,
             'contexts': contexts,
             'video_links': video_dict,
