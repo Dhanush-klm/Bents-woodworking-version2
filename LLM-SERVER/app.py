@@ -117,7 +117,7 @@ SYSTEM_INSTRUCTIONS = """You are an AI assistant specialized in information retr
         8. Always prioritize accuracy over speed. If you're not certain about an answer, say so.
         9. For multi-part queries, address each part separately and clearly.
         10. Aim to provide responses within seconds, even for large documents.
-        11. please only Provide the timestamp for where the information was found in the original video. must Use the format {{timestamp:MM:SS}} for timestamps under an hour, and {{timestamp:HH:MM:SS}} for longer videos.
+        11. Do not include timestamps in your response text. Focus on providing clear, direct answers.
         12. Do not include any URLs in your response. Just provide the timestamps in the specified format.
         13. When referencing timestamps that may be inaccurate, you can use language like "around", "approximately", or "in the vicinity of" to indicate that the exact moment may vary slightly.
         Remember, always respond in English, even if the query or context is in another language.
@@ -416,6 +416,9 @@ def chat():
             return jsonify({'error': 'An unexpected error occurred while processing your request.'}), 500
         
         initial_answer = result['answer']
+        # Remove any timestamp formatting from the display answer
+        display_answer = re.sub(r'\{timestamp:[^\}]+\}', '', initial_answer)
+        
         contexts = [doc.page_content for doc in result['source_documents']]
         source_documents = result['source_documents']
 
@@ -437,8 +440,8 @@ def chat():
         logging.debug(f"Retrieved matched products: {related_products}")
 
         response_data = {
-            'response': processed_answer,
-            'initial_answer': initial_answer,
+            'response': display_answer,  # Clean answer without timestamps
+            'initial_answer': initial_answer,  # Original answer with timestamps (for processing)
             'related_products': related_products,
             'urls': urls,
             'contexts': contexts,
