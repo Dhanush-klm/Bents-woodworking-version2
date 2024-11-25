@@ -3,7 +3,12 @@
   "builds": [
     {
       "src": "index.cjs",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "functions": {
+          "*.cjs": { "maxDuration": 60 }
+        }
+      }
     }
   ],
   "routes": [
