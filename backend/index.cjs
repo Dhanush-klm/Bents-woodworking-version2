@@ -13,9 +13,6 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 204
 };
-export const config = {
-  maxDuration: 300,
-}
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
