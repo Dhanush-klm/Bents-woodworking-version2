@@ -4,15 +4,13 @@
     {
       "src": "index.cjs",
       "use": "@vercel/node",
-      "config": {
-        "maxDuration": 300
-      }
+      "maxDuration": 300
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "index.cjs",
+      "dest": "index.cjs"
     }
   ]
 }
