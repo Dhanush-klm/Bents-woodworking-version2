@@ -49,7 +49,6 @@ os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
 os.environ["LANGCHAIN_PROJECT"] = "jason-json"
 
-
 # Video title list
 VIDEO_TITLE_LIST = [
     "5 Modifications I Made In My Garage Shop - New Shop Part 5",
@@ -127,12 +126,43 @@ Then show that is in generated response with the provided context.
 
 logging.basicConfig(level=logging.DEBUG)
 
+def rewrite_query(query, chat_history=None):
+    """
+    Rewrites the user query to be more specific and searchable using LLM.
+    """
+    try:
+        # Create prompt that's compatible with the existing LLM setup
+        rewrite_prompt = f"""As bent's woodworks assistant, rewrite this query to be more specific 
+        and searchable for woodworking content. Add relevant terminology and context while maintaining 
+        the original intent. Only return the rewritten query without any explanations.
+
+        Original query: {query}
+        
+        Chat history: {json.dumps(chat_history) if chat_history else '[]'}
+        
+        Rewritten query:"""
+        
+        # Use the existing LLM instance
+        response = llm.predict(rewrite_prompt)
+        
+        # Clean up the response
+        cleaned_response = response.replace("Rewritten query:", "").strip()
+        
+        # Add logging consistent with existing code style
+        logging.debug(f"Original query: {query}")
+        logging.debug(f"Rewritten query: {cleaned_response}")
+        
+        return cleaned_response if cleaned_response else query
+        
+    except Exception as e:
+        logging.error(f"Error in query rewriting: {str(e)}", exc_info=True)
+        return query  # Fallback to original query
+
 def get_matched_products(video_title):
     logging.debug(f"Attempting to get matched products for title: {video_title}")
     try:
         conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Query for partial matches in the title, case-insensitive
             query = """
                 SELECT * FROM products 
                 WHERE LOWER(tags) LIKE LOWER(%s)
@@ -144,7 +174,6 @@ def get_matched_products(video_title):
             logging.debug(f"Raw matched products from database: {matched_products}")
         conn.close()
 
-        # Process the results
         related_products = [
             {
                 'id': product['id'],
@@ -207,12 +236,10 @@ def process_answer(answer, urls, source_documents):
 
         try:
             enhanced_description = llm.predict(description_prompt).strip()
-            # Take only first 8 words maximum
             words = enhanced_description.split()[:8]
             return ' '.join(words)
         except Exception as e:
             logging.error(f"Error generating description: {str(e)}")
-            # Fallback to a very short context
             return ' '.join(context.split()[:6])
 
     def replace_timestamp(match, source_index, source_documents):
@@ -220,7 +247,6 @@ def process_answer(answer, urls, source_documents):
         timestamp_pos = match.start()
         context = extract_context(answer, timestamp_pos)
         
-        # Get the correct URL and title for this timestamp
         current_url = urls[source_index] if source_index < len(urls) else None
         current_metadata = source_documents[source_index].metadata if source_index < len(source_documents) else {}
         current_title = current_metadata.get('title', "Unknown Video")
@@ -233,17 +259,15 @@ def process_answer(answer, urls, source_documents):
             'links': full_urls,
             'timestamp': timestamp,
             'description': enhanced_description,
-            'video_title': current_title  # Now using the correct title from metadata
+            'video_title': current_title
         }
     
-    # Find all timestamps and their contexts
     timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
     timestamps_with_context = [
         replace_timestamp(match, i, source_documents) 
         for i, match in enumerate(timestamp_matches)
     ]
     
-    # Create enhanced video dictionary
     video_dict = {
         f'[video{i}]': {
             'urls': entry['links'],
@@ -254,7 +278,6 @@ def process_answer(answer, urls, source_documents):
         for i, entry in enumerate(timestamps_with_context)
     }
     
-    # Replace timestamps in the answer with placeholders
     processed_answer = answer
     for i, match in enumerate(timestamp_matches):
         placeholder = f'[video{i}]'
@@ -301,6 +324,24 @@ def upsert_transcript(transcript_text, metadata, index_name):
     
     transcript_vector_stores[index_name].add_documents(documents)
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2), retry=retry_if_exception_type(LLMResponseError))
+def retry_llm_call(qa_chain, query, chat_history):
+    try:
+        result = qa_chain({"question": query, "chat_history": chat_history})
+        
+        if result is None or 'answer' not in result or not result['answer']:
+            raise LLMNoResponseError("LLM failed to generate a response")
+        
+        if result['answer'].endswith('...') or len(result['answer']) < 20:
+            raise LLMResponseCutOff("LLM response appears to be cut off")
+        return result
+    except Exception as e:
+        if isinstance(e, LLMResponseError):
+            logging.error(f"LLM call failed: {str(e)}")
+            raise
+        logging.error(f"Unexpected error in LLM call: {str(e)}")
+        raise LLMNoResponseError("LLM failed due to an unexpected error")
+
 @app.route('/')
 @app.route('/database')
 def serve_spa():
@@ -335,9 +376,11 @@ def chat():
             ai = chat_history[i + 1] if i + 1 < len(chat_history) else ""
             formatted_history.append((human, ai))
 
-        logging.debug(f"Formatted chat history: {formatted_history}")
+        # Rewrite the query for better search results
+        rewritten_query = rewrite_query(user_query, formatted_history)
+        logging.debug(f"Query rewritten from '{user_query}' to '{rewritten_query}'")
 
-        # Relevance check
+        # Continue with the existing relevance check using the rewritten query
         relevance_check_prompt = f"""
         Given the following question or message and the chat history, determine if it is:
         1. A greeting or general conversation starter
@@ -356,7 +399,7 @@ def chat():
         Chat History:
         {formatted_history[-3:] if formatted_history else "No previous context"}
 
-        Current Question: {user_query}
+        Current Question: {rewritten_query}
         
         Response (GREETING, RELEVANT, INAPPROPRIATE, or NOT RELEVANT):
         """
@@ -389,7 +432,7 @@ def chat():
                 'video_links': {}
             })
 
-        # If we reach here, the query is relevant and not a greeting
+        # If we reach here, the query is relevant
         retriever = transcript_vector_stores[selected_index].as_retriever(search_kwargs={"k": 5})
         
         prompt = ChatPromptTemplate.from_messages([
@@ -405,7 +448,7 @@ def chat():
         )
         
         try:
-            result = retry_llm_call(qa_chain, user_query, formatted_history)
+            result = retry_llm_call(qa_chain, rewritten_query, formatted_history)
         except LLMResponseError as e:
             error_message = "Failed to get a complete response from the AI after multiple attempts."
             if isinstance(e, LLMNoResponseError):
@@ -414,9 +457,8 @@ def chat():
         except Exception as e:
             logging.error(f"Unexpected error in LLM call: {str(e)}")
             return jsonify({'error': 'An unexpected error occurred while processing your request.'}), 500
-        
+
         initial_answer = result['answer']
-        # Remove any timestamp formatting from the display answer
         display_answer = re.sub(r'\{timestamp:[^\}]+\}', '', initial_answer)
         
         contexts = [doc.page_content for doc in result['source_documents']]
@@ -440,8 +482,8 @@ def chat():
         logging.debug(f"Retrieved matched products: {related_products}")
 
         response_data = {
-            'response': display_answer,  # Clean answer without timestamps
-            'initial_answer': initial_answer,  # Original answer with timestamps (for processing)
+            'response': display_answer,
+            'initial_answer': initial_answer,
             'related_products': related_products,
             'urls': urls,
             'contexts': contexts,
@@ -459,8 +501,6 @@ def chat():
 @app.route('/api/user/<user_id>', methods=['GET'])
 def get_user_data(user_id):
     try:
-        # In a real application, you'd fetch this data from a database
-        # For now, we'll return a dummy structure
         user_data = {
             'conversationsBySection': {
                 "bents": [],
@@ -562,25 +602,6 @@ def update_document():
     except Exception as e:
         print(f"Error in update_document: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2), retry=retry_if_exception_type(LLMResponseError))
-def retry_llm_call(qa_chain, query, chat_history):
-    try:
-        result = qa_chain({"question": query, "chat_history": chat_history})
-        
-        if result is None or 'answer' not in result or not result['answer']:
-            raise LLMNoResponseError("LLM failed to generate a response")
-        
-        if result['answer'].endswith('...') or len(result['answer']) < 20:
-            raise LLMResponseCutOff("LLM response appears to be cut off")
-        
-        return result
-    except Exception as e:
-        if isinstance(e, LLMResponseError):
-            logging.error(f"LLM call failed: {str(e)}")
-            raise
-        logging.error(f"Unexpected error in LLM call: {str(e)}")
-        raise LLMNoResponseError("LLM failed due to an unexpected error")
 
 if __name__ == '__main__':
     verify_database()
