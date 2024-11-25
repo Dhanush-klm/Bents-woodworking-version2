@@ -729,36 +729,36 @@ export default function Chat({ isVisible }) {
       <div className="mt-4 border-t pt-4">
         <h3 className="text-xl font-semibold mb-4">Recommended Videos</h3>
         <div className="border rounded-[1.5rem] p-6 bg-white">
-        <h4 className="text-lg mb-4 font-bold">Source</h4>
-          <div className="space-y-6">
-            {Object.entries(groupedVideos).map(([title, videos], idx) => (
-              <div key={idx} className="space-y-2">
-                <h5 className="text-base font-medium text-gray-900">
-                  {title}
-                </h5>
-                <div className="ml-4 space-y-3">
-                  {videos.map((video, i) => (
-                    <div key={i} className="space-y-1">
-                      <a
-                        href={video.urls?.[0] || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 block"
-                      >
-                      
-<span className="font-medium">{video.description.replace(/"/g, '')}</span> 
-
-                      </a>
-                      {video.timestamp && (
-                        <div className="text-gray-600 text-sm">
-                          Timestamp: {video.timestamp}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+          <h4 className="text-lg mb-4 font-bold">Source</h4>
+          <div className="overflow-x-auto pb-4">
+            <div className="flex space-x-4">
+              {Object.entries(groupedVideos).map(([title, videos], idx) => (
+                <div key={idx} className="flex-shrink-0 w-72 border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <h5 className="text-base font-medium text-gray-900 mb-2">
+                    {title}
+                  </h5>
+                  <div className="space-y-2">
+                    {videos.map((video, i) => (
+                      <div key={i}>
+                        <a
+                          href={video.urls?.[0] || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 block"
+                        >
+                          <span className="text-sm">{video.description.replace(/"/g, '')}</span>
+                        </a>
+                        {video.timestamp && (
+                          <div className="text-gray-600 text-xs">
+                            Timestamp: {video.timestamp}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
