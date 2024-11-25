@@ -3,20 +3,20 @@
   "builds": [
     {
       "src": "index.cjs",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "maxDuration": 300
+      }
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "index.cjs"
+      "dest": "index.cjs",
+      "headers": {
+        "x-timeout": "300000"
+      },
+      "timeoutMs": 300000
     }
   ]
-}
-{
-  "functions": {
-    "index.cjs": {
-      "maxDuration": 300 // This function can run for a maximum of 30 seconds
-    }
-  }
 }
