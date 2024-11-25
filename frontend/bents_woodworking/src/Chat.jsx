@@ -437,7 +437,7 @@ export default function Chat({ isVisible }) {
       };
 
       return (
-        <div className="border border-red-500 rounded-[1.5rem] p-6 bg-white mb-6">
+        <div className="border border-gray-300 rounded-[1.5rem] p-6 bg-white mb-6">
           <div className="relative w-full">
             <div className="overflow-x-auto pb-4 hide-scrollbar">
               <div className="flex space-x-4 min-w-min">
