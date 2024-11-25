@@ -70,7 +70,7 @@ const watermarkStyles = `
     z-index: 0;
   }
 `;
-
+export const maxDuration = 300; 
 export default function Chat({ isVisible }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
