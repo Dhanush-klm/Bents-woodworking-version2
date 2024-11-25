@@ -6,7 +6,7 @@
       "use": "@vercel/node",
       "config": {
         "functions": {
-          "*.cjs": { "maxDuration": 60 }
+          "*.cjs": { "maxDuration": 300 }
         }
       }
     }
