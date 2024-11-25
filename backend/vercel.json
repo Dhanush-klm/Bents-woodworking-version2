@@ -13,10 +13,6 @@
     {
       "src": "/(.*)",
       "dest": "index.cjs",
-      "headers": {
-        "x-timeout": "300000"
-      },
-      "timeoutMs": 300000
     }
   ]
 }
