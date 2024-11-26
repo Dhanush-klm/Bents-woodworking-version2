@@ -70,7 +70,7 @@ const watermarkStyles = `
     z-index: 0;
   }
 `;
-
+export const maxDuration = 300; 
 export default function Chat({ isVisible }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
@@ -437,14 +437,16 @@ export default function Chat({ isVisible }) {
       };
 
       return (
-        <div className="relative w-full">
-          <div className="overflow-x-auto pb-4 hide-scrollbar">
-            <div className="flex space-x-4 min-w-min">
-              {Array.from(videoIds).map((videoId) => (
-                <div key={videoId} className="flex-shrink-0">
-                  <YouTube videoId={videoId} opts={opts} />
-                </div>
-              ))}
+        <div className="border border-gray-300 rounded-[1.5rem] p-6 bg-white mb-6">
+          <div className="relative w-full">
+            <div className="overflow-x-auto pb-4 hide-scrollbar">
+              <div className="flex space-x-4 min-w-min">
+                {Array.from(videoIds).map((videoId) => (
+                  <div key={videoId} className="flex-shrink-0 shadow-sm rounded-lg overflow-hidden">
+                    <YouTube videoId={videoId} opts={opts} />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
