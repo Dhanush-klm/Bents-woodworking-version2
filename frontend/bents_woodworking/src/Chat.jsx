@@ -236,22 +236,29 @@ export default function Chat({ isVisible }) {
       }
     }, 100);
 
-    // Start progress interval
+    // Start progress interval with faster initial steps
     const progressInterval = setInterval(() => {
       setLoadingProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          return 100;
+        // First three steps complete quickly (0-75%)
+        if (prev < 75) {
+          return prev + 5; // Faster increment for first three steps
         }
-        return prev + 1;
+        // Last step (Generating answer) takes most of the time (75-100%)
+        if (prev >= 75 && prev < 100) {
+          return prev + 0.5; // Slower increment for final step
+        }
+        clearInterval(progressInterval);
+        return 100;
       });
-    }, 150);
+    }, 100); // Reduced interval time
 
     try {
       const response = await axios.post('https://bents-backend-server.vercel.app/chat', {
         message: currentQuery,
         selected_index: selectedIndex,
         chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
+      }, {
+        timeout: 300000
       });
       
       // Store conversation with related products
@@ -487,10 +494,10 @@ export default function Chat({ isVisible }) {
       )}
       <div className={cn(
         "flex items-center bg-background",
-        "border rounded-xl",
+        "border rounded-[8px]",
         "ring-offset-background",
         "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
-        "w-full max-w-xl"
+        "w-full max-w-[640px]"
       )}>
         <Button
           onClick={handleNewConversation}
@@ -558,26 +565,32 @@ export default function Chat({ isVisible }) {
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              // Remove auto-height adjustment since we want fixed height
+              e.target.style.height = 'auto';
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
             }}
-            placeholder="Ask a question..."
+            placeholder="Ask your question..."
             className={cn(
-              "flex-grow resize-none h-[40px]",
+              "flex-grow",
               "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
-              "py-2 px-3",
+              "py-1 px-3",
               "text-base text-center",
-              "overflow-x-auto", // Enable horizontal scroll
-              "overflow-y-hidden", // Hide vertical scroll
-              "whitespace-nowrap", // Prevent text wrapping
+              "min-h-[32px]",
+              "max-h-[120px]",
+              "transition-height duration-200",
+              "placeholder:text-gray-500",
+              "placeholder:pt-[3px]",
+              "focus:placeholder:opacity-0",
               isLoading && currentConversation.length === 0 ? "opacity-50" : ""
             )}
             disabled={false}
-            rows={1}
             style={{ 
-              lineHeight: '20px',
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              whiteSpace: 'nowrap'
+              resize: 'none',
+              overflowY: 'auto',
+              whiteSpace: 'pre-wrap',
+              lineHeight: '18px',
+              paddingTop: '6px',
+              caretColor: 'black',
+              textAlign: 'center',
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -649,7 +662,8 @@ export default function Chat({ isVisible }) {
 
   // Update the renderLoadingFact function
   const renderLoadingFact = () => {
-    const currentStep = Math.floor((loadingProgress / 100) * 4);
+    // Adjust step calculation to make first three steps complete quickly
+    const currentStep = loadingProgress >= 75 ? 3 : Math.floor((loadingProgress / 75) * 3);
     
     return (
       <div 
@@ -679,11 +693,6 @@ export default function Chat({ isVisible }) {
                     <span className={`text-sm ${index <= currentStep ? 'text-gray-900' : 'text-gray-500'}`}>
                       {step}
                     </span>
-                    {index === currentStep && (
-                      <span className="text-sm text-blue-500 ml-2">
-                        {Math.min(Math.max(((loadingProgress % 25) * 4), 0), 100)}%
-                      </span>
-                    )}
                   </div>
                   {index < processingSteps.length - 1 && (
                     <div className={`absolute left-2 ml-[-1px] w-0.5 h-3 ${
@@ -721,42 +730,79 @@ export default function Chat({ isVisible }) {
   const renderSourceVideos = (videoLinks) => {
     if (!videoLinks || Object.keys(videoLinks).length === 0) return null;
 
-    const groupedVideos = groupVideosByTitle(videoLinks);
+    const allVideos = Object.values(videoLinks).filter(video => video && video.urls?.[0]);
+    
+    const getStartTime = (timestamp) => {
+      if (!timestamp) return 0;
+      const [minutes, seconds] = timestamp.split(':').map(Number);
+      return minutes * 60 + seconds;
+    };
+
+    const opts = {
+      height: '158',  // 16:9 ratio for width of 280
+      width: '280',
+      playerVars: {
+        autoplay: 0,
+        modestbranding: 1,
+        rel: 0,
+        start: 0
+      },
+    };
 
     return (
-      <div className="mt-4 border-t pt-4">
-        <h3 className="text-xl font-semibold mb-4">Recommended Videos</h3>
-        <div className="border rounded-[1.5rem] p-6 bg-white">
-        <h4 className="text-lg mb-4 font-bold">Source</h4>
-          <div className="space-y-6">
-            {Object.entries(groupedVideos).map(([title, videos], idx) => (
-              <div key={idx} className="space-y-2">
-                <h5 className="text-base font-medium text-gray-900">
-                  {title}
-                </h5>
-                <div className="ml-4 space-y-3">
-                  {videos.map((video, i) => (
-                    <div key={i} className="space-y-1">
-                      <a
-                        href={video.urls?.[0] || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800 block"
-                      >
-                      
-<span className="font-medium">{video.description.replace(/"/g, '')}</span> 
+      <div className="mt-6">
+        <h3 className="text-xl font-semibold px-4 mb-4">Related Videos</h3>
+        <div className="relative">
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+            <div className="flex gap-4 px-4 pb-4 min-w-min">
+              {allVideos.map((video, index) => {
+                const videoId = getYoutubeVideoIds([video.urls[0]])[0];
+                const startTime = getStartTime(video.timestamp);
+                const videoOpts = {
+                  ...opts,
+                  playerVars: {
+                    ...opts.playerVars,
+                    start: startTime
+                  }
+                };
 
-                      </a>
-                      {video.timestamp && (
-                        <div className="text-gray-600 text-sm">
-                          Timestamp: {video.timestamp}
+                return (
+                  <div key={index} className="flex-shrink-0 w-[280px] bg-white rounded-[2rem] border shadow-sm overflow-hidden">
+                    {videoId && (
+                      <div className="relative p-3 pt-3">
+                        <div className="w-full aspect-video rounded-[1.25rem] overflow-hidden">
+                          <YouTube 
+                            videoId={videoId} 
+                            opts={videoOpts}
+                          />
                         </div>
-                      )}
+                        <div className="absolute bottom-5 right-5 bg-black/75 text-white text-xs px-2 py-1 rounded-full">
+                          {video.timestamp}
+                        </div>
+                      </div>
+                    )}
+                    <div className="px-4 pb-4 space-y-2">
+                      <h4 className="font-medium text-sm line-clamp-1">
+                        {video.video_title}
+                      </h4>
+                      <p className="text-sm text-gray-600 line-clamp-2 min-h-[2.5rem]">
+                        {video.description?.replace(/"/g, '')}
+                      </p>
+                      <div className="flex justify-end pt-1">
+                        <a
+                          href={`${video.urls[0]}${startTime ? `&t=${startTime}s` : ''}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-gray-600 hover:text-gray-800 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full transition-colors"
+                        >
+                          Watch Full Video
+                        </a>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -771,17 +817,10 @@ export default function Chat({ isVisible }) {
       ref={index === currentConversation.length - 1 ? latestConversationRef : null}
     >
       <h2 className="font-bold mb-4">{conv.question}</h2>
-      
-      {/* Video Players */}
       <div className="mb-4">
-        {renderVideos(conv.video, conv.videoLinks)}
         {formatResponse(conv.text || '', conv.videoLinks)}
       </div>
-
-      {/* Source Videos Section */}
       {renderSourceVideos(conv.videoLinks)}
-      
-      <div className="clear-both"></div>
     </div>
   );
 
@@ -1000,6 +1039,27 @@ const styles = `
 
   .history-button.active .history-icon {
     transform: rotate(-10deg);
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(209 213 219);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(156 163 175);
   }
 `;
 
