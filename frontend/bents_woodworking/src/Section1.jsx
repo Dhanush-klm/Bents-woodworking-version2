@@ -42,7 +42,7 @@ function ToolRecommendationLogo({ className = "w-12 h-12" }) {
 
 function FeatureCard({ icon, title, description }) {
   return (
-    <div className="bg-gray-100 p-6 rounded-lg shadow-md">
+    <div className="bg-gray-100 p-6 rounded-[8px] shadow-md">
       <div className="text-black mb-4">{icon}</div>
       <h3 className="text-black text-xl font-semibold mb-2">{title}</h3>
       <p className="text-gray-700">{description}</p>
@@ -102,12 +102,12 @@ export default function Section1() {
             Your AI-powered companion for all things woodworking. Get expert advice, tool recommendations, and shop improvement tips.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-<Link to="/chat" className="inline-block bg-[rgba(23,155,215,255)] text-black font-semibold py-3 px-6 w-48 rounded-full hover:bg-[rgba(20,139,193,255)] transition duration-300">
-  Start Chatting
-</Link>
-<Link to="/shop" className="inline-block bg-black text-white font-semibold py-3 px-6 w-48 rounded-full border-2 border-white hover:bg-white hover:text-black transition duration-300">
-  Shop Now
-</Link>
+            <Link to="/chat" className="inline-block bg-[rgba(23,155,215,255)] text-black font-semibold py-3 px-6 w-48 rounded-[8px] hover:bg-[rgba(20,139,193,255)] transition duration-300">
+              Start Chatting
+            </Link>
+            <Link to="/shop" className="inline-block bg-black text-white font-semibold py-3 px-6 w-48 rounded-[8px] border-2 border-white hover:bg-white hover:text-black transition duration-300">
+              Shop Now
+            </Link>
           </div>
         </div>
       </section>
@@ -155,7 +155,7 @@ export default function Section1() {
                 alt="Woodworking Workshop"
                 width={600}
                 height={400}
-                className="rounded-lg shadow-lg"
+                className="rounded-[8px] shadow-lg"
               />
             </div>
           </div>
@@ -174,7 +174,7 @@ export default function Section1() {
                 name="name"
                 value={formData.name}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
                 required
               />
             </div>
@@ -186,7 +186,7 @@ export default function Section1() {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
                 required
               />
             </div>
@@ -198,7 +198,7 @@ export default function Section1() {
                 name="subject"
                 value={formData.subject}
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
                 required
               />
             </div>
@@ -210,18 +210,18 @@ export default function Section1() {
                 value={formData.message}
                 onChange={handleChange}
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-[8px] focus:outline-none focus:ring-2 focus:ring-[rgba(23,155,215,255)]"
                 required
               ></textarea>
             </div>
             {formMessage.content && (
-              <div className={`mb-4 p-2 rounded ${formMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              <div className={`mb-4 p-2 rounded-[8px] ${formMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 {formMessage.content}
               </div>
             )}
             <button
               type="submit"
-              className="w-full bg-black text-white font-semibold py-2 px-4 rounded-full hover:bg-gray-800 transition duration-300"
+              className="w-full bg-black text-white font-semibold py-2 px-4 rounded-[8px] hover:bg-gray-800 transition duration-300"
               disabled={isSubmitting}
             >
               {isSubmitting ? 'Sending...' : 'Send Message'}
