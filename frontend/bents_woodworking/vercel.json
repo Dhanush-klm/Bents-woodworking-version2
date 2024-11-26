@@ -9,7 +9,7 @@
       "dest": "/",
       "config": {
         "functions": {
-          "*.cjs": { "maxDuration": 300 }
+          "*src/Chat.jsx": { "maxDuration": 300 }
         }
       }
     },
