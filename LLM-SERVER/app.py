@@ -164,7 +164,7 @@ def get_matched_products(video_title):
         conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             query = """
-                SELECT * FROM products 
+                SELECT id, title, tags, link FROM products 
                 WHERE LOWER(tags) LIKE LOWER(%s)
             """
             search_term = f"%{video_title}%"
@@ -179,8 +179,7 @@ def get_matched_products(video_title):
                 'id': product['id'],
                 'title': product['title'],
                 'tags': product['tags'].split(',') if product['tags'] else [],
-                'link': product['link'],
-                'image_data': product['image_data'] if 'image_data' in product else None
+                'link': product['link']
             } for product in matched_products
         ]
 
@@ -190,7 +189,6 @@ def get_matched_products(video_title):
     except Exception as e:
         logging.error(f"Error in get_matched_products: {str(e)}", exc_info=True)
         return []
-
 def verify_database():
     try:
         conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
