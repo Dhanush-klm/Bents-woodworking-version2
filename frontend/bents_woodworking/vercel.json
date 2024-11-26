@@ -6,7 +6,12 @@
     },
     {
       "src": "/chat",
-      "dest": "/"
+      "dest": "/",
+      "config": {
+        "functions": {
+          "*.cjs": { "maxDuration": 300 }
+        }
+      }
     },
     {
       "src": "/shop",
