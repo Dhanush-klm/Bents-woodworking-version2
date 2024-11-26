@@ -6,12 +6,7 @@
     },
     {
       "src": "/chat",
-      "dest": "/",
-      "config": {
-        "functions": {
-          "*src/Chat.jsx": { "maxDuration": 300 }
-        }
-      }
+      "dest": "/"
     },
     {
       "src": "/shop",
