@@ -3,7 +3,7 @@
     "builds": [
       { "src": "app.py", "use": "@vercel/python","config": {
         "functions": {
-          "*.cjs": { "maxDuration": 300 }
+          "*templates/.py": { "maxDuration": 300 }
         }
       } }
     ],
