@@ -963,6 +963,15 @@ export default function Chat({ isVisible }) {
   // Main render
   return (
     <div className="flex flex-col h-[calc(100vh-75px)] bg-white pt-[75px] watermark-background">
+      {/* Updated history button without borders */}
+      <button
+        onClick={() => setIsSidebarOpen(true)}
+        className="fixed top-20 left-4 z-40 p-2 hover:opacity-75 transition-opacity"
+        aria-label="Open history"
+      >
+        <BookOpen className="h-5 w-5 text-gray-600" />
+      </button>
+
       {renderSidebar()}
       <div className="relative flex-grow overflow-hidden">
         <div className="h-full overflow-y-auto p-4 pt-16 pb-24">
