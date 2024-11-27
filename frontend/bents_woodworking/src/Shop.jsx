@@ -120,7 +120,7 @@ export default function Shop() {
           </div>
           <div className="w-48 sm:w-[200px] self-start sm:self-auto">
             <Select value={sortOption} onValueChange={handleSort}>
-              <SelectTrigger className="w-full bg-white text-black rounded-[8px]">
+              <SelectTrigger className="w-full bg-white text-black rounded-[8px] border-gray-300">
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
               <SelectContent className="bg-white border shadow-lg z-50 rounded-[8px]">
