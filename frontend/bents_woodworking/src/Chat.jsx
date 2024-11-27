@@ -37,15 +37,16 @@ const watermarkStyles = `
       #f8fafc 0%,
       #f1f5f9 100%
     );
+    min-height: 100vh;
   }
 
   .watermark-background::before {
     content: '';
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    height: 100%;
+    height: 100vh;
     background-image: 
       radial-gradient(circle at 25px 25px, rgba(148, 163, 184, 0.05) 2%, transparent 15%),
       radial-gradient(circle at 75px 75px, rgba(148, 163, 184, 0.05) 2%, transparent 15%);
@@ -54,14 +55,13 @@ const watermarkStyles = `
     z-index: 0;
   }
 
-  /* Optional: Add a second layer for more depth */
   .watermark-background::after {
     content: '';
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    height: 100%;
+    height: 100vh;
     background-image: 
       radial-gradient(circle at 50px 50px, rgba(148, 163, 184, 0.03) 2%, transparent 12%);
     background-size: 100px 100px;
@@ -461,28 +461,117 @@ export default function Chat({ isVisible }) {
   const formatResponse = (text, videoLinks) => {
     let formattedText = text;
 
+    // First, normalize line endings and split into lines
+    formattedText = formattedText.replace(/\r\n/g, '\n');
+    let lines = formattedText.split('\n');
+    
+    // Process each line
+    lines = lines.map(line => {
+      // Handle bullet points (lines starting with hyphen)
+      if (line.trim().startsWith('-')) {
+        return `<div class="flex items-center space-x-2 ml-4 my-1">
+          <span class="text-gray-600"></span>
+          <span>${line.trim().substring(1).trim()}</span>
+        </div>`;
+      }
+      return line;
+    }).join('\n');
+    
+    formattedText = lines;
+
+    // Handle video links replacement
     if (videoLinks) {
-      formattedText = text.replace(/\[video(\d+)\]/g, (match, p1) => {
+      formattedText = formattedText.replace(/\[video(\d+)\]/g, (match, p1) => {
         const links = videoLinks[`[video${p1}]`];
-        if (links && links.length > 0) {
-          const firstLink = links[0];
-          return `<a href="${firstLink}" target="_blank" rel="noopener noreferrer" class="video-link text-blue-500 hover:underline">Video</a>`;
+        if (links && links.urls && links.urls.length > 0) {
+          return `<a href="${links.urls[0]}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Video ${p1}</a>`;
         }
         return match;
       });
     }
-    
+
+    // Handle headers with bold text (###** **) - Multiple patterns
     formattedText = formattedText.replace(
-      /(\d+)\.\s*\*\*(.*?)\*\*(:?)\s*([-\s]*)(.+)/g,
-      (match, number, title, colon, dash, content) => {
-        return `<div class="font-bold mt-2 mb-1">${number}. ${title}${colon}</div><div class="ml-4">${dash}${content}</div>`;
+      /^(#{1,6})\s*\*\*(.*?)\*\*/gm,
+      (match, hashes, content) => {
+        const level = hashes.length;
+        const fontSize = {
+          1: 'text-2xl',
+          2: 'text-xl',
+          3: 'text-lg',
+          4: 'text-base',
+          5: 'text-sm',
+          6: 'text-xs'
+        }[level] || 'text-base';
+        return `<h${level} class="font-bold ${fontSize} mt-4 mb-2">${content}</h${level}>`;
       }
     );
-    
-    formattedText = formattedText.replace(/\*\*\*\*timestamp\*\*\*\*\s*(\[video\d+\])/g, '$1');
-    formattedText = formattedText.replace(/^(\#{1,6})\s*\*\*(.*?)\*\*/gm, '$1 <strong>$2</strong>');
-    
-    return <div dangerouslySetInnerHTML={{ __html: formattedText }} />;
+
+    // Handle regular headers (###)
+    formattedText = formattedText.replace(
+      /^(#{1,6})\s*(.*?)$/gm,
+      (match, hashes, content) => {
+        const level = hashes.length;
+        const fontSize = {
+          1: 'text-2xl',
+          2: 'text-xl',
+          3: 'text-lg',
+          4: 'text-base',
+          5: 'text-sm',
+          6: 'text-xs'
+        }[level] || 'text-base';
+        return `<h${level} class="font-bold ${fontSize} mt-4 mb-2">${content}</h${level}>`;
+      }
+    );
+
+    // Handle bold text (**text**)
+    formattedText = formattedText.replace(
+      /\*\*(.*?)\*\*/g,
+      '<strong class="font-bold">$1</strong>'
+    );
+
+    // Handle numbered points with bold titles
+    formattedText = formattedText.replace(
+      /(\d+)\.\s*\*\*(.*?)\*\*(:?)\s*([-–\s]*)(.+)/g,
+      (match, number, title, colon, dash, content) => `
+        <div class="mt-3 mb-2">
+          <div class="font-bold">${number}. ${title}${colon}</div>
+          <div class="ml-6 mt-1">${dash}${content}</div>
+        </div>
+      `
+    );
+
+    // Handle regular numbered points
+    formattedText = formattedText.replace(
+      /(\d+)\.\s+([^*].*?)(?=\n|$)/g,
+      (match, number, content) => `
+        <div class="mt-2 mb-1 ml-4">
+          <div>${number}. ${content}</div>
+        </div>
+      `
+    );
+
+    // Clean up any timestamp markers
+    formattedText = formattedText.replace(/\*\*\*\*timestamp\*\*\*\*/g, '');
+
+    // Add wrapper div for bullet points if they exist
+    if (formattedText.includes('class="flex items-center space-x-2 ml-4')) {
+      formattedText = `<div class="space-y-1">${formattedText}</div>`;
+    }
+
+    // Wrap in container with proper styling
+    return (
+      <div 
+        dangerouslySetInnerHTML={{ __html: formattedText }}
+        className="prose prose-slate max-w-none break-words whitespace-pre-line space-y-2"
+        style={{
+          width: '100%',
+          maxWidth: '100%',
+          overflowWrap: 'break-word',
+          wordBreak: 'break-word'
+        }}
+      />
+    );
   };
 
   const renderSearchBar = () => (
@@ -572,25 +661,34 @@ export default function Chat({ isVisible }) {
             className={cn(
               "flex-grow",
               "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
-              "py-1 px-3",
-              "text-base text-center",
+              "py-2 px-4",
+              "text-base",
               "min-h-[32px]",
               "max-h-[120px]",
               "transition-height duration-200",
               "placeholder:text-gray-500",
-              "placeholder:pt-[3px]",
               "focus:placeholder:opacity-0",
+              "placeholder:pt-[6px]",
+              "pt-[10px]",
+              "leading-[1.5]",
               isLoading && currentConversation.length === 0 ? "opacity-50" : ""
             )}
             disabled={false}
             style={{ 
               resize: 'none',
               overflowY: 'auto',
-              whiteSpace: 'pre-wrap',
-              lineHeight: '18px',
-              paddingTop: '6px',
+              lineHeight: '1.5',
               caretColor: 'black',
-              textAlign: 'center',
+              textAlign: 'left',
+              paddingTop: '10px',
+              display: 'block',
+              minHeight: '42px',
+              width: '100%',
+              maxWidth: '100%',
+              boxSizing: 'border-box',
+              wordBreak: 'break-all',
+              whiteSpace: 'normal',
+              overflowWrap: 'anywhere',
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -738,17 +836,6 @@ export default function Chat({ isVisible }) {
       return minutes * 60 + seconds;
     };
 
-    const opts = {
-      height: '158',  // 16:9 ratio for width of 280
-      width: '280',
-      playerVars: {
-        autoplay: 0,
-        modestbranding: 1,
-        rel: 0,
-        start: 0
-      },
-    };
-
     return (
       <div className="mt-6">
         <h3 className="text-xl font-semibold px-4 mb-4">Related Videos</h3>
@@ -757,47 +844,69 @@ export default function Chat({ isVisible }) {
             <div className="flex gap-4 px-4 pb-4 min-w-min">
               {allVideos.map((video, index) => {
                 const videoId = getYoutubeVideoIds([video.urls[0]])[0];
-                const startTime = getStartTime(video.timestamp);
-                const videoOpts = {
-                  ...opts,
-                  playerVars: {
-                    ...opts.playerVars,
-                    start: startTime
-                  }
-                };
+                const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                const fullVideoUrl = video.urls[0].split('&t=')[0];
 
                 return (
-                  <div key={index} className="flex-shrink-0 w-[200px] bg-white rounded-[8px] border shadow-sm overflow-hidden">
-                    {videoId && (
-                      <div className="relative p-3 pt-3">
-                        <div className="w-full aspect-video rounded-[8px] overflow-hidden">
-                          <YouTube 
-                            videoId={videoId} 
-                            opts={videoOpts}
-                          />
-                        </div>
-                        <div className="absolute bottom-5 right-5 bg-black/75 text-white text-xs px-2 py-1 rounded-full">
-                          {video.timestamp}
+                  <div
+                    key={index}
+                    className="flex-shrink-0 w-[250px] bg-white rounded-[8px] border shadow-sm overflow-hidden hover:shadow-md transition-shadow flex flex-col"
+                  >
+                    <a
+                      href={`${video.urls[0]}${video.timestamp ? `&t=${getStartTime(video.timestamp)}s` : ''}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <div className="relative">
+                        <img 
+                          src={thumbnailUrl}
+                          alt={video.video_title}
+                          className="w-full h-[140px] object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-full bg-black/75 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z"/>
+                            </svg>
+                          </div>
                         </div>
                       </div>
-                    )}
-                    <div className="px-4 pb-4 space-y-2">
-                      <h4 className="font-medium text-sm line-clamp-1">
-                        {video.video_title}
-                      </h4>
-                      <p className="text-sm text-gray-600 line-clamp-2 min-h-[2.5rem]">
-                        {video.description?.replace(/"/g, '')}
-                      </p>
-                      <div className="flex justify-end pt-1">
-                        <a
-                          href={`${video.urls[0]}${startTime ? `&t=${startTime}s` : ''}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-gray-600 hover:text-gray-800 text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full transition-colors"
-                        >
-                          Watch Full Video
-                        </a>
+                    </a>
+                    <div className="p-3 flex flex-col flex-grow">
+                      <div className="flex-grow">
+                        <h4 className="font-medium text-sm line-clamp-2 mb-2">
+                          {video.video_title}
+                        </h4>
+                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                          {video.description?.replace(/"/g, '')}
+                        </p>
+                        {video.timestamp && (
+                          <div className="flex items-center text-sm text-gray-500 mb-2">
+                            <svg 
+                              className="w-4 h-4 mr-1" 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round" 
+                                strokeWidth={2} 
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" 
+                              />
+                            </svg>
+                            <span>Starts at {video.timestamp}</span>
+                          </div>
+                        )}
                       </div>
+                      <a
+                        href={fullVideoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-center text-sm text-gray-600 hover:text-gray-800 py-2 border rounded-[8px] hover:bg-gray-50 transition-colors mt-auto"
+                      >
+                        Watch Full Video
+                      </a>
                     </div>
                   </div>
                 );
@@ -813,11 +922,28 @@ export default function Chat({ isVisible }) {
   const renderConversation = (conv, index) => (
     <div 
       key={index} 
-      className="bg-white p-6 rounded-[8px] shadow mb-4"
+      className={cn(
+        "bg-white p-6 rounded-[8px] shadow mb-4  break-words whitespace-normal",
+        index === 0 ? "mt-4" : "" // Add top margin to first conversation
+      )}
       ref={index === currentConversation.length - 1 ? latestConversationRef : null}
+      style={{
+        width: '100%',
+        maxWidth: '100%',
+        overflowWrap: 'break-word',
+        wordBreak: 'break-all'
+      }}
     >
-      <h2 className="font-bold mb-4">{conv.question}</h2>
-      <div className="mb-4">
+      <h2 className="font-bold mb-4 break-words whitespace-normal">{conv.question}</h2>
+      <div 
+        className="mb-4 break-words whitespace-normal"
+        style={{
+          width: '100%',
+          maxWidth: '100%',
+          overflowWrap: 'break-word',
+          wordBreak: 'break-all'
+        }}
+      >
         {formatResponse(conv.text || '', conv.videoLinks)}
       </div>
       {renderSourceVideos(conv.videoLinks)}
@@ -839,21 +965,6 @@ export default function Chat({ isVisible }) {
     <div className="flex flex-col h-[calc(100vh-75px)] bg-white pt-[75px] watermark-background">
       {renderSidebar()}
       <div className="relative flex-grow overflow-hidden">
-        <button
-          onClick={() => {
-            setIsSidebarOpen(true);
-            const btn = document.querySelector('.history-button');
-            btn.classList.add('active');
-            setTimeout(() => btn.classList.remove('active'), 300);
-          }}
-          className={cn(
-            "history-button",
-            currentConversation.length > 0 ? "flex" : "hidden"
-          )}
-        >
-          <BookOpen className="history-icon" />
-        </button>
-        
         <div className="h-full overflow-y-auto p-4 pt-16 pb-24">
           <div ref={topOfConversationRef}></div>
           
@@ -907,7 +1018,7 @@ export default function Chat({ isVisible }) {
 
           {/* Conversations */}
           {currentConversation.length > 0 && (
-            <div className="space-y-4 pb-[100px]"> {/* Reduced bottom padding */}
+            <div className="space-y-4 pb-[100px] conversation-container"> {/* Reduced bottom padding */}
               {currentConversation.map((conv, index) => renderConversation(conv, index))}
               
               {/* Loading state */}
@@ -1008,39 +1119,6 @@ const styles = `
     100% { transform: scale(1); }
   }
 
-  .history-button {
-    transition: all 0.3s ease;
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: fixed;
-    top: 85px;
-    left: 16px;
-    z-index: 30;
-    background-color: white;
-    border-radius: 9999px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-
-  .history-icon {
-    width: 20px;
-    height: 20px;
-  }
-
-  .history-button:hover {
-    background-color: #f8f9fa;
-  }
-
-  .history-button.active {
-    animation: pulseScale 0.3s ease;
-  }
-
-  .history-button.active .history-icon {
-    transform: rotate(-10deg);
-  }
-
   .scrollbar-thin {
     scrollbar-width: thin;
   }
@@ -1060,6 +1138,34 @@ const styles = `
   
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background-color: rgb(156 163 175);
+  }
+
+  .break-words {
+    word-wrap: break-word;
+    word-break: break-all;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  /* Add specific styles for conversation containers */
+  .conversation-text {
+    width: 100%;
+    max-width: 100%;
+    word-wrap: break-word;
+    word-break: break-all;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  @media (max-width: 768px) {
+    .conversation-container {
+      padding-top: 48px; /* Add top padding to prevent text hiding behind button */
+    }
+
+    /* Ensure the loading state and other content also respects the padding */
+    .loading-container {
+      padding-top: 48px;
+    }
   }
 `;
 
