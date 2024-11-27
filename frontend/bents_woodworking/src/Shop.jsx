@@ -17,14 +17,14 @@ function ProductCard({ product }) {
     ? `data:image/jpeg;base64,${product.image_data}`
     : '/path/to/default/image.jpg';
   return (
-    <Card className="w-full flex flex-col h-full bg-white">
+    <Card className="w-full flex flex-col h-full bg-white rounded-[8px] border border-gray-300">
       <CardContent className="p-4 flex-grow flex flex-col">
         <div className="flex flex-col items-center mb-4">
-          <div className="w-full h-48 flex items-center justify-center bg-white rounded-md overflow-hidden mb-4">
+          <div className="w-full h-48 flex items-center justify-center bg-white rounded-[8px] overflow-hidden mb-4">
             <img
               src={imageUrl}
               alt={product.title}
-              className="max-w-full max-h-full object-contain"
+              className="max-w-full max-h-full object-contain rounded-[8px]"
             />
           </div>
           <h3 className="font-semibold text-lg text-center mb-2">{product.title}</h3>
@@ -114,16 +114,16 @@ export default function Shop() {
               placeholder="Search products..."
               value={searchTerm}
               onChange={handleSearch}
-              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-[8px] focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           </div>
           <div className="w-48 sm:w-[200px] self-start sm:self-auto">
             <Select value={sortOption} onValueChange={handleSort}>
-              <SelectTrigger className="w-full bg-white text-black">
+              <SelectTrigger className="w-full bg-white text-black rounded-[8px]">
                 <SelectValue placeholder="Sort" />
               </SelectTrigger>
-              <SelectContent className="bg-white border shadow-lg z-50">
+              <SelectContent className="bg-white border shadow-lg z-50 rounded-[8px]">
                 <SelectItem value="default" className="text-black bg-white hover:bg-gray-100 cursor-pointer">
                   Sort by
                 </SelectItem>
