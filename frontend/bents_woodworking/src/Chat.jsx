@@ -432,7 +432,7 @@ export default function Chat({ isVisible }) {
 
     if (videoIds.size > 0) {
       const opts = {
-        height: '120',
+        height: '140',
         width: '180',
         playerVars: {
           autoplay: 0,
@@ -668,7 +668,7 @@ export default function Chat({ isVisible }) {
     return (
       <div 
         ref={loadingCardRef}
-        className="w-full max-w-xl mx-auto bg-white rounded-[2rem] border shadow-sm"
+        className="w-full max-w-xl mx-auto bg-white rounded-[8px] border shadow-sm"
       >
         <div className="p-6">
           <div className="space-y-4">
@@ -767,10 +767,10 @@ export default function Chat({ isVisible }) {
                 };
 
                 return (
-                  <div key={index} className="flex-shrink-0 w-[280px] bg-white rounded-[2rem] border shadow-sm overflow-hidden">
+                  <div key={index} className="flex-shrink-0 w-[200px] bg-white rounded-[8px] border shadow-sm overflow-hidden">
                     {videoId && (
                       <div className="relative p-3 pt-3">
-                        <div className="w-full aspect-video rounded-[1.25rem] overflow-hidden">
+                        <div className="w-full aspect-video rounded-[8px] overflow-hidden">
                           <YouTube 
                             videoId={videoId} 
                             opts={videoOpts}
@@ -813,7 +813,7 @@ export default function Chat({ isVisible }) {
   const renderConversation = (conv, index) => (
     <div 
       key={index} 
-      className="bg-white p-6 rounded-[2rem] shadow mb-4"
+      className="bg-white p-6 rounded-[8px] shadow mb-4"
       ref={index === currentConversation.length - 1 ? latestConversationRef : null}
     >
       <h2 className="font-bold mb-4">{conv.question}</h2>
