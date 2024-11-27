@@ -873,7 +873,7 @@ export default function Chat({ isVisible }) {
                         </div>
                       </div>
                     </a>
-                    <div className="p-3 flex flex-col flex-grow">
+                    <div className="p-3 flex flex-col h-full">
                       <div className="flex-grow">
                         <h4 className="font-medium text-sm line-clamp-2 mb-2">
                           {video.video_title}
@@ -881,6 +881,8 @@ export default function Chat({ isVisible }) {
                         <p className="text-sm text-gray-600 line-clamp-2 mb-2">
                           {video.description?.replace(/"/g, '')}
                         </p>
+                      </div>
+                      <div className="mt-auto">
                         {video.timestamp && (
                           <div className="flex items-center text-sm text-gray-500 mb-2">
                             <svg 
@@ -899,15 +901,15 @@ export default function Chat({ isVisible }) {
                             <span>Starts at {video.timestamp}</span>
                           </div>
                         )}
+                        <a
+                          href={fullVideoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block text-center text-sm text-gray-600 hover:text-gray-800 py-2 border rounded-[8px] hover:bg-gray-50 transition-colors"
+                        >
+                          Watch Full Video
+                        </a>
                       </div>
-                      <a
-                        href={fullVideoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block text-center text-sm text-gray-600 hover:text-gray-800 py-2 border rounded-[8px] hover:bg-gray-50 transition-colors mt-auto"
-                      >
-                        Watch Full Video
-                      </a>
                     </div>
                   </div>
                 );
@@ -924,15 +926,15 @@ export default function Chat({ isVisible }) {
     <div 
       key={index} 
       className={cn(
-        "bg-white p-6 rounded-[8px] shadow mb-4  break-words whitespace-normal",
-        index === 0 ? "mt-4" : "" // Add top margin to first conversation
+        "bg-white p-6 rounded-[8px] shadow mb-4 break-words whitespace-normal",
+        index === 0 ? "mt-4" : ""
       )}
       ref={index === currentConversation.length - 1 ? latestConversationRef : null}
       style={{
         width: '100%',
         maxWidth: '100%',
         overflowWrap: 'break-word',
-        wordBreak: 'break-all'
+        wordBreak: 'normal'
       }}
     >
       <h2 className="font-bold mb-4 break-words whitespace-normal">{conv.question}</h2>
@@ -942,7 +944,7 @@ export default function Chat({ isVisible }) {
           width: '100%',
           maxWidth: '100%',
           overflowWrap: 'break-word',
-          wordBreak: 'break-all'
+          wordBreak: 'normal'
         }}
       >
         {formatResponse(conv.text || '', conv.videoLinks)}
@@ -1135,7 +1137,7 @@ const styles = `
 
   .break-words {
     word-wrap: break-word;
-    word-break: break-all;
+    word-break: normal;
     white-space: normal;
     overflow-wrap: break-word;
   }
@@ -1145,7 +1147,7 @@ const styles = `
     width: 100%;
     max-width: 100%;
     word-wrap: break-word;
-    word-break: break-all;
+    word-break: normal;
     white-space: normal;
     overflow-wrap: break-word;
   }
