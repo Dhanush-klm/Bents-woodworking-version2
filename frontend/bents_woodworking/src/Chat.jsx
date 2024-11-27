@@ -671,12 +671,13 @@ export default function Chat({ isVisible }) {
               "placeholder:pt-[6px]",
               "pt-[10px]",
               "leading-[1.5]",
+              "scrollable-textarea",
               isLoading && currentConversation.length === 0 ? "opacity-50" : ""
             )}
             disabled={false}
             style={{ 
               resize: 'none',
-              overflowY: 'auto',
+              overflowY: 'scroll',
               lineHeight: '1.5',
               caretColor: 'black',
               textAlign: 'left',
@@ -686,9 +687,9 @@ export default function Chat({ isVisible }) {
               width: '100%',
               maxWidth: '100%',
               boxSizing: 'border-box',
-              wordBreak: 'break-all',
-              whiteSpace: 'normal',
-              overflowWrap: 'anywhere',
+              wordBreak: 'break-word',
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'break-word',
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -1085,41 +1086,24 @@ const styles = `
     }
   }
 
+  .scrollable-textarea {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+    overflow-y: scroll !important;
+  }
+
+  .scrollable-textarea::-webkit-scrollbar {
+    width: 0 !important;
+    display: none !important;
+  }
+
   textarea {
     font-family: inherit;
     font-size: inherit;
     line-height: 1.5;
-    overflow-x: auto;  /* Enable horizontal scrolling */
-    overflow-y: hidden; /* Hide vertical scrollbar */
-    white-space: nowrap; /* Prevent text wrapping */
-  }
-
-  /* Hide default scrollbar */
-  textarea::-webkit-scrollbar {
-    height: 6px;  /* Changed from width to height for horizontal scrollbar */
-    width: 0;     /* Hide vertical scrollbar */
-  }
-
-  textarea::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  textarea::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.2);
-    border-radius: 3px;
-  }
-
-  /* For Firefox */
-  textarea {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
-  }
-
-  /* Ensure the textarea doesn't grow vertically */
-  textarea {
-    resize: none;
-    max-height: 40px;
-    min-height: 40px;
+    white-space: pre-wrap !important;
+    overflow-wrap: break-word !important;
+    word-wrap: break-word !important;
   }
 
   @keyframes pulseScale {
