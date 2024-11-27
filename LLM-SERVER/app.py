@@ -35,7 +35,7 @@ class LLMNoResponseError(LLMResponseError):
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002","https://bents-next.vercel.app"]}})
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002","https://bents-frontend-server.vercel.app","https://bents-backend-server.vercel.app"]}})
 
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
@@ -48,38 +48,6 @@ os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
 os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
 os.environ["LANGCHAIN_PROJECT"] = "jason-json"
-
-# Video title list
-VIDEO_TITLE_LIST = [
-    "5 Modifications I Made In My Garage Shop - New Shop Part 5",
-    "2020 Shop Tour",
-    "American Green Lights",
-    "Assembly Table and Miter Saw Station",
-    "Complete Mr Cool Install",
-    "Every track saw owner could use this",
-    "How To Install Mr Cool DIY Series",
-    "I Built a Wall in my Garage",
-    "Moving A Woodworking Shop - New Shop Part 2",
-    "My shop is soundproof",
-    "People Told Me My Garage Door Would Explode",
-    "The biggest advancement in dust collection",
-    "Using SketchUp To Design Woodworking Shop - New Shop Part 1",
-    "8 Tools I Regret Not Buying Sooner",
-    "10 Tools Every Woodworker Should Own",
-    "10 woodworking tools I regret not buying sooner",
-    "10 Woodworking tools you will not regret",
-    "11 woodworking tools you need to own",
-    "12 Tools I will Never REGRET Buying",
-    "15 cabinet tools I do not regret",
-    "15 Woodworking Tools You Will not Regret",
-    "25 tools I regret not buying sooner",
-    "Every track saw owner could use this",
-    "FINALLY! The sprayer I have been waiting for",
-    "I would not buy these with your money",
-    "Stop wasting your money on the wrong ones",
-    "The 5 TSO tools you cannot live without",
-    "Track Saw Square Comparison TSO ProductsBench Dogs UKWoodpeckers ToolsInsta Rail Square"
-]
 
 # Initialize Langchain components
 embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
@@ -340,6 +308,8 @@ def retry_llm_call(qa_chain, query, chat_history):
         logging.error(f"Unexpected error in LLM call: {str(e)}")
         raise LLMNoResponseError("LLM failed due to an unexpected error")
 
+
+
 @app.route('/')
 @app.route('/database')
 def serve_spa():
@@ -374,14 +344,10 @@ def chat():
             ai = chat_history[i + 1] if i + 1 < len(chat_history) else ""
             formatted_history.append((human, ai))
 
-        # Rewrite the query for better search results
-        rewritten_query = rewrite_query(user_query, formatted_history)
-        logging.debug(f"Query rewritten from '{user_query}' to '{rewritten_query}'")
-
-        # Continue with the existing relevance check using the rewritten query
+        # First, check relevance before query rewriting
         relevance_check_prompt = f"""
         Given the following question or message and the chat history, determine if it is:
-        1. A greeting or general conversation starter
+        1. A greeting or send-off like "thankyou" or "goodbye" or messages or casual messages like 'hey' or 'hello' or general conversation starter
         2. Related to woodworking, tools, home improvement, or the assistant's capabilities and also query about bents-woodworking youtube channel general questions.
         3. Related to the company, its products, services, or business operations
         4. A continuation or follow-up question to the previous conversation
@@ -397,40 +363,78 @@ def chat():
         Chat History:
         {formatted_history[-3:] if formatted_history else "No previous context"}
 
-        Current Question: {rewritten_query}
+        Current Question: {user_query}
         
         Response (GREETING, RELEVANT, INAPPROPRIATE, or NOT RELEVANT):
         """
         
         relevance_response = llm.predict(relevance_check_prompt)
         
+        # Handle non-relevant cases first
         if "GREETING" in relevance_response.upper():
-            greeting_response = llm.predict("Generate a friendly greeting response for a woodworking assistant.")
-            return jsonify({
-                'response': greeting_response,
-                'related_products': [],
-                'urls': [],
-                'contexts': [],
-                'video_links': {}
-            })
+            try:
+                greeting_prompt = f"Generate a friendly greeting response for a woodworking assistant in response to: '{user_query}'"
+                greeting_response = llm.predict(greeting_prompt)
+                return jsonify({
+                    'response': greeting_response,
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
+            except Exception as e:
+                logging.error(f"Error generating greeting: {str(e)}")
+                return jsonify({
+                    'response': f"Hello! I'm Jason Bent's woodworking assistant. How can I help you today?",
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
         elif "INAPPROPRIATE" in relevance_response.upper():
-            return jsonify({
-                'response': "I'm sorry, but this is outside my context of answering. Is there something else I can help you with regarding woodworking, tools, or home improvement?",
-                'related_products': [],
-                'urls': [],
-                'contexts': [],
-                'video_links': {}
-            })
+            inappropriate_prompt = f"Generate a polite response declining to answer the inappropriate query: '{user_query}' and redirect to woodworking topics"
+            try:
+                decline_response = llm.predict(inappropriate_prompt)
+                return jsonify({
+                    'response': decline_response,
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
+            except Exception as e:
+                return jsonify({
+                    'response': "I'm sorry, but this is outside my context of answering. Is there something else I can help you with regarding woodworking, tools, or home improvement?",
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
         elif "NOT RELEVANT" in relevance_response.upper():
-            return jsonify({
-                'response': "I'm sorry, but I'm specialized in topics related to our company, woodworking, tools, and home improvement. I can also engage in general conversation or continue our previous discussion. Could you please ask a question related to these topics, continue our previous conversation, or start with a greeting?",
-                'related_products': [],
-                'urls': [],
-                'contexts': [],
-                'video_links': {}
-            })
+            irrelevant_prompt = f"Generate a polite response explaining why the query: '{user_query}' is not relevant to woodworking and redirect to appropriate topics"
+            try:
+                redirect_response = llm.predict(irrelevant_prompt)
+                return jsonify({
+                    'response': redirect_response,
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
+            except Exception as e:
+                return jsonify({
+                    'response': "I'm sorry, but I'm specialized in topics related to our company, woodworking, tools, and home improvement. Could you please ask a question related to these topics?",
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
 
-        # If we reach here, the query is relevant
+        # Only proceed with query rewriting if the query is relevant
+        rewritten_query = rewrite_query(user_query, formatted_history)
+        logging.debug(f"Query rewritten from '{user_query}' to '{rewritten_query}'")
+
+        # Continue with existing retrieval and response generation logic
         retriever = transcript_vector_stores[selected_index].as_retriever(search_kwargs={"k": 5})
         
         prompt = ChatPromptTemplate.from_messages([
