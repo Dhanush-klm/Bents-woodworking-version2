@@ -842,7 +842,7 @@ export default function Chat({ isVisible }) {
         <h3 className="text-xl font-semibold px-0 mb-4">Related Videos</h3>
         <div className="relative">
           <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-            <div className="flex gap-4 px-4 pb-4 min-w-min">
+            <div className="flex gap-4 px-0 pb-4 min-w-min">
               {allVideos.map((video, index) => {
                 const videoId = getYoutubeVideoIds([video.urls[0]])[0];
                 const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
