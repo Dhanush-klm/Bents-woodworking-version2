@@ -103,6 +103,7 @@ export default function Chat({ isVisible }) {
   const [shouldScrollToTop, setShouldScrollToTop] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const loadingCardRef = useRef(null);
+  const productsScrollContainerRef = useRef(null);
 
   // Sort sessions using useMemo
   const sortedSessions = useMemo(() => {
@@ -261,6 +262,15 @@ export default function Chat({ isVisible }) {
         timeout: 300000
       });
       
+      // Update related products from the response
+      if (response.data.related_products) {
+        setCurrentRelatedProducts(response.data.related_products.map(product => ({
+          id: product.id || uuidv4(), // Add id if not provided
+          title: product.title,
+          link: product.link
+        })));
+      }
+      
       // Store conversation with related products
       const newConversation = {
         question: currentQuery,
@@ -349,62 +359,96 @@ export default function Chat({ isVisible }) {
 
   // Update the renderRelatedProducts function
   const renderRelatedProducts = () => {
-    if (!currentRelatedProducts.length) return null;
+    if (!currentRelatedProducts || currentRelatedProducts.length === 0) return null;
+
+    // Scroll handlers
+    const scroll = (direction) => {
+      if (productsScrollContainerRef.current) {
+        const scrollAmount = 300;
+        const newScrollPosition = productsScrollContainerRef.current.scrollLeft + 
+          (direction === 'left' ? -scrollAmount : scrollAmount);
+        productsScrollContainerRef.current.scrollTo({
+          left: newScrollPosition,
+          behavior: 'smooth'
+        });
+      }
+    };
 
     return (
-      <div className="mt-4 border-t pt-4">
-        {/* Products Carousel - Smaller and without title */}
-        {currentRelatedProducts.length > 0 && (
-          <div className="mb-4">
-            <div className="overflow-x-auto">
-              <div className="flex space-x-3 pb-3">
-                {currentRelatedProducts.map((product, index) => (
-                  <a
-                    key={index}
-                    href={product.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-shrink-0 w-48 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <span className="text-blue-600 hover:text-blue-800 line-clamp-2 text-sm">{product.title}</span>
-                  </a>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900">Related Products</h3>
+        </div>
+        
+        <div className="relative">
+          {/* Left scroll button */}
+          <button
+            onClick={() => scroll('left')}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+            style={{ transform: 'translate(-50%, -50%)' }}
+          >
+            <svg 
+              className="w-5 h-5 text-gray-600" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          </button>
 
-        {/* Rest of the content remains unchanged */}
-        <h3 className="text-lg font-semibold mb-3">Recommended Videos</h3>
-        {/* Source Videos Section - unchanged */}
-        {currentSourceVideos && currentSourceVideos.length > 0 && (
-          <div className="border rounded-lg p-4">
-            <h4 className="font-bold text-gray-800 mb-3">Source</h4>
-            <div className="space-y-3">
-              {currentSourceVideos.map((video, index) => (
-                <div key={index} className="flex flex-col">
-                  <a
-                    href={video.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group text-blue-500 underline"
-                  >
-                    <div className="flex items-start space-x-2">
-                      <span className="text-blue-600 group-hover:text-blue-800 flex-grow">
-                        {video.title || "5 Modifications I Made In My Garage Shop - New Shop Part 5"}
-                      </span>
-                      {video.timestamp && (
-                        <span className="text-sm text-gray-500 whitespace-nowrap">
-                          {`(${formatTimestamp(video.timestamp)})`}
-                        </span>
-                      )}
-                    </div>
-                  </a>
-                </div>
+          {/* Scrollable container */}
+          <div 
+            ref={productsScrollContainerRef}
+            className="overflow-x-auto hide-scrollbar px-8"
+          >
+            <div className="flex gap-4 pb-3 min-w-min">
+              {currentRelatedProducts.map((product) => (
+                <a
+                  key={product.id}
+                  href={product.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-shrink-0 px-4 py-3 bg-white border border-gray-200 
+                           rounded-[8px] hover:border-blue-500 hover:shadow-sm 
+                           transition-all duration-200 w-[280px]"
+                >
+                  <div className="flex items-center justify-center">
+                    <span className="text-sm font-medium text-gray-900 line-clamp-1 text-center">
+                      {product.title}
+                    </span>
+                  </div>
+                </a>
               ))}
             </div>
           </div>
-        )}
+
+          {/* Right scroll button */}
+          <button
+            onClick={() => scroll('right')}
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
+            style={{ transform: 'translate(50%, -50%)' }}
+          >
+            <svg 
+              className="w-5 h-5 text-gray-600" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
     );
   };
@@ -949,6 +993,7 @@ export default function Chat({ isVisible }) {
       >
         {formatResponse(conv.text || '', conv.videoLinks)}
       </div>
+      {renderRelatedProducts()}
       {renderSourceVideos(conv.videoLinks)}
     </div>
   );
@@ -1190,3 +1235,23 @@ const handleSectionChange = (value) => {
       break;
   }
 };
+
+// Update the styles to hide scrollbar and maintain smooth scrolling
+const productStyles = `
+  .hide-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;     /* Firefox */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  }
+  
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+  
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+`;
