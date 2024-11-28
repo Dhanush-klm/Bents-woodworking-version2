@@ -586,7 +586,7 @@ export default function Chat({ isVisible }) {
         "border rounded-[8px]",
         "ring-offset-background",
         "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
-        "w-full max-w-[640px]"
+        "w-[calc(107%-10px)] sm:w-full"
       )}>
         <Button
           onClick={handleNewConversation}
@@ -838,8 +838,8 @@ export default function Chat({ isVisible }) {
     };
 
     return (
-      <div className="mt-6">
-        <h3 className="text-xl font-semibold px-4 mb-4">Related Videos</h3>
+      <div className="mt-6 px-0">
+        <h3 className="text-xl font-semibold px-0 mb-4">Related Videos</h3>
         <div className="relative">
           <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
             <div className="flex gap-4 px-4 pb-4 min-w-min">
@@ -990,7 +990,7 @@ export default function Chat({ isVisible }) {
                 : "min-h-0 py-8" // Add some padding instead of full height
             )}>
               <div className="space-y-8 w-full">
-                <div className="w-full">
+                <div className="w-[calc(100%-1px)] sm:w-full">
                   <div className="flex items-center justify-center w-full">
                     {renderSearchBar()}
                   </div>
@@ -1003,7 +1003,7 @@ export default function Chat({ isVisible }) {
                 )}
                 
                 {showInitialQuestions && !isLoading && (
-                  <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="w-[calc(100%+0px)] sm:w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {randomQuestions.map((question, index) => (
                       <div key={index} className={cn(
                         "flex-grow flex items-center bg-background",
