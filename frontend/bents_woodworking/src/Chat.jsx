@@ -369,19 +369,6 @@ export default function Chat({ isVisible }) {
   const renderRelatedProducts = () => {
     if (!currentRelatedProducts || currentRelatedProducts.length === 0) return null;
 
-    // Scroll handlers
-    const scroll = (direction) => {
-      if (productsScrollContainerRef.current) {
-        const scrollAmount = 300;
-        const newScrollPosition = productsScrollContainerRef.current.scrollLeft + 
-          (direction === 'left' ? -scrollAmount : scrollAmount);
-        productsScrollContainerRef.current.scrollTo({
-          left: newScrollPosition,
-          behavior: 'smooth'
-        });
-      }
-    };
-
     return (
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
@@ -389,31 +376,9 @@ export default function Chat({ isVisible }) {
         </div>
         
         <div className="relative">
-          {/* Left scroll button - now follows scroll */}
-          <button
-            onClick={() => scroll('left')}
-            className="sticky left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors float-left"
-          >
-            <svg 
-              className="w-5 h-5 text-gray-600" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
-
-          {/* Scrollable container */}
           <div 
             ref={productsScrollContainerRef}
-            className="overflow-x-auto hide-scrollbar px-8 scroll-smooth"
-            style={{ scrollSnapType: 'x mandatory' }}
+            className="overflow-x-auto custom-scrollbar scroll-smooth"
           >
             <div className="flex gap-4 pb-3 min-w-min">
               {currentRelatedProducts.map((product) => (
@@ -424,8 +389,7 @@ export default function Chat({ isVisible }) {
                   rel="noopener noreferrer"
                   className="flex-shrink-0 px-4 py-3 bg-white border border-gray-200 
                            rounded-[8px] hover:border-blue-500 hover:shadow-sm 
-                           transition-all duration-200 w-[280px]"
-                  style={{ scrollSnapAlign: 'start' }}
+                           transition-all duration-200 w-[280px] cursor-pointer"
                 >
                   <div className="flex items-center justify-center">
                     <span className="text-sm font-medium text-gray-900 line-clamp-1 text-center">
@@ -436,27 +400,6 @@ export default function Chat({ isVisible }) {
               ))}
             </div>
           </div>
-
-          {/* Right scroll button - now follows scroll */}
-          <button
-            onClick={() => scroll('right')}
-            className="sticky right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors float-right"
-            style={{ marginLeft: 'auto' }}
-          >
-            <svg 
-              className="w-5 h-5 text-gray-600" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </button>
         </div>
       </div>
     );
@@ -917,26 +860,24 @@ export default function Chat({ isVisible }) {
     return groupedVideos;
   };
 
-  // Updated renderSourceVideos function
+  // Update the renderSourceVideos function
   const renderSourceVideos = (videoLinks) => {
     if (!videoLinks || Object.keys(videoLinks).length === 0) return null;
 
     const allVideos = Object.values(videoLinks).filter(video => video && video.urls?.[0]);
     
-    const getStartTime = (timestamp) => {
-      if (!timestamp) return 0;
-      const [minutes, seconds] = timestamp.split(':').map(Number);
-      return minutes * 60 + seconds;
-    };
+    if (allVideos.length === 0) return null;
 
     return (
-      <div className="mt-6 px-0">
-        <h3 className="text-xl font-semibold px-0 mb-4">Related Videos</h3>
+      <div className="mt-6">
+        <h3 className="text-lg font-semibold mb-4">Related Videos</h3>
         <div className="relative">
-          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-            <div className="flex gap-4 px-0 pb-4 min-w-min">
+          <div className="overflow-x-auto custom-scrollbar scroll-smooth">
+            <div className="flex gap-4 pb-4 min-w-min">
               {allVideos.map((video, index) => {
                 const videoId = getYoutubeVideoIds([video.urls[0]])[0];
+                if (!videoId) return null;
+
                 const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
                 const fullVideoUrl = video.urls[0].split('&t=')[0];
 
@@ -949,11 +890,12 @@ export default function Chat({ isVisible }) {
                       href={`${video.urls[0]}${video.timestamp ? `&t=${getStartTime(video.timestamp)}s` : ''}`}
                       target="_blank"
                       rel="noopener noreferrer"
+                      className="block flex-grow"
                     >
                       <div className="relative">
                         <img 
                           src={thumbnailUrl}
-                          alt={video.video_title}
+                          alt={video.video_title || 'Video thumbnail'}
                           className="w-full h-[140px] object-cover"
                         />
                         <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
@@ -964,44 +906,37 @@ export default function Chat({ isVisible }) {
                           </div>
                         </div>
                       </div>
-                    </a>
-                    <div className="p-3 flex flex-col h-full">
-                      <div className="flex-grow">
+                      <div className="p-3 flex-grow">
                         <h4 className="font-medium text-sm line-clamp-2 mb-2">
-                          {video.video_title}
+                          {video.video_title || 'Video Title'}
                         </h4>
-                        <p className="text-sm text-gray-600 line-clamp-2 mb-2">
-                          {video.description?.replace(/"/g, '')}
-                        </p>
-                      </div>
-                      <div className="mt-auto">
+                        {video.description && (
+                          <p className="text-sm text-gray-600 line-clamp-2 mb-2">
+                            {video.description.replace(/"/g, '')}
+                          </p>
+                        )}
                         {video.timestamp && (
                           <div className="flex items-center text-sm text-gray-500 mb-2">
-                            <svg 
-                              className="w-4 h-4 mr-1" 
-                              fill="none" 
-                              stroke="currentColor" 
-                              viewBox="0 0 24 24"
-                            >
-                              <path 
-                                strokeLinecap="round" 
-                                strokeLinejoin="round" 
-                                strokeWidth={2} 
-                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" 
-                              />
+                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <span>Starts at {video.timestamp}</span>
                           </div>
                         )}
-                        <a
-                          href={fullVideoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block text-center text-sm text-gray-600 hover:text-gray-800 py-2 border rounded-[8px] hover:bg-gray-50 transition-colors"
-                        >
-                          Watch Full Video
-                        </a>
                       </div>
+                    </a>
+                    {/* Fixed bottom section - Arrow removed */}
+                    <div className="border-t bg-gray-50">
+                      <a
+                        href={fullVideoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-3 flex items-center justify-center hover:bg-gray-100 transition-colors group"
+                      >
+                        <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
+                          Watch Full Video
+                        </span>
+                      </a>
                     </div>
                   </div>
                 );
@@ -1013,7 +948,7 @@ export default function Chat({ isVisible }) {
     );
   };
 
-  // Update the renderConversation function
+  // Update the renderConversation function to include both products and videos
   const renderConversation = (conv, index) => (
     <div 
       key={index} 
@@ -1022,23 +957,9 @@ export default function Chat({ isVisible }) {
         index === 0 ? "mt-4" : ""
       )}
       ref={index === currentConversation.length - 1 ? latestConversationRef : null}
-      style={{
-        width: '100%',
-        maxWidth: '100%',
-        overflowWrap: 'break-word',
-        wordBreak: 'normal'
-      }}
     >
       <h2 className="font-bold mb-4 break-words whitespace-normal">{conv.question}</h2>
-      <div 
-        className="mb-4 break-words whitespace-normal"
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          overflowWrap: 'break-word',
-          wordBreak: 'normal'
-        }}
-      >
+      <div className="mb-4 break-words whitespace-normal">
         {formatResponse(conv.text || '', conv.videoLinks)}
       </div>
       {renderRelatedProducts()}
@@ -1055,6 +976,53 @@ export default function Chat({ isVisible }) {
       });
     }
   }, [currentConversation.length]); // This will trigger when a new conversation is added
+
+  // Move the useEffect inside the component
+  useEffect(() => {
+    const slider = productsScrollContainerRef.current;
+    if (!slider) return;
+
+    let isDown = false;
+    let startX;
+    let scrollLeft;
+
+    const handleMouseDown = (e) => {
+      isDown = true;
+      slider.style.cursor = 'grabbing';
+      startX = e.pageX - slider.offsetLeft;
+      scrollLeft = slider.scrollLeft;
+    };
+
+    const handleMouseLeave = () => {
+      isDown = false;
+      slider.style.cursor = 'grab';
+    };
+
+    const handleMouseUp = () => {
+      isDown = false;
+      slider.style.cursor = 'grab';
+    };
+
+    const handleMouseMove = (e) => {
+      if (!isDown) return;
+      e.preventDefault();
+      const x = e.pageX - slider.offsetLeft;
+      const walk = (x - startX) * 2; // Scroll speed multiplier
+      slider.scrollLeft = scrollLeft - walk;
+    };
+
+    slider.addEventListener('mousedown', handleMouseDown);
+    slider.addEventListener('mouseleave', handleMouseLeave);
+    slider.addEventListener('mouseup', handleMouseUp);
+    slider.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      slider.removeEventListener('mousedown', handleMouseDown);
+      slider.removeEventListener('mouseleave', handleMouseLeave);
+      slider.removeEventListener('mouseup', handleMouseUp);
+      slider.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
 
   // Main render
   return (
@@ -1377,6 +1345,47 @@ const styles = `
   form.flex-grow {
     min-width: 0;
   }
+
+  /* Custom scrollbar styles */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(203, 213, 225, 0.4) transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(203, 213, 225, 0.4);
+    border-radius: 3px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(203, 213, 225, 0.6);
+  }
+
+  /* Enable touch-based scrolling on mobile */
+  @media (hover: none) {
+    .custom-scrollbar {
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
+  /* Enable mouse drag scrolling on desktop */
+  .custom-scrollbar {
+    cursor: grab;
+    user-select: none;
+  }
+
+  .custom-scrollbar:active {
+    cursor: grabbing;
+  }
 `;
 
 // Add the styles to the document
@@ -1435,4 +1444,11 @@ const handleFAQSelect = (index) => {
       autoResizeTextarea(textarea);
     }
   }, 0);
+};
+
+// Add this helper function if not already present
+const getStartTime = (timestamp) => {
+  if (!timestamp) return 0;
+  const [minutes, seconds] = timestamp.split(':').map(Number);
+  return minutes * 60 + seconds;
 };
