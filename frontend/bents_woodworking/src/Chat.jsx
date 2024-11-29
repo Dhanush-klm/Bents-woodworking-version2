@@ -221,6 +221,14 @@ export default function Chat({ isVisible }) {
     if (index !== undefined) {
       setLoadingQuestionIndex(index);
       setSearchQuery(randomQuestions[index]); // Set search query for random questions
+      
+      // Add this: Trigger textarea resize after setting FAQ question
+      setTimeout(() => {
+        const textarea = document.querySelector('.auto-expand-textarea');
+        if (textarea) {
+          autoResizeTextarea(textarea);
+        }
+      }, 0);
     }
     setShowInitialQuestions(false);
 
@@ -381,11 +389,10 @@ export default function Chat({ isVisible }) {
         </div>
         
         <div className="relative">
-          {/* Left scroll button */}
+          {/* Left scroll button - now follows scroll */}
           <button
             onClick={() => scroll('left')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
-            style={{ transform: 'translate(-50%, -50%)' }}
+            className="sticky left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors float-left"
           >
             <svg 
               className="w-5 h-5 text-gray-600" 
@@ -405,7 +412,8 @@ export default function Chat({ isVisible }) {
           {/* Scrollable container */}
           <div 
             ref={productsScrollContainerRef}
-            className="overflow-x-auto hide-scrollbar px-8"
+            className="overflow-x-auto hide-scrollbar px-8 scroll-smooth"
+            style={{ scrollSnapType: 'x mandatory' }}
           >
             <div className="flex gap-4 pb-3 min-w-min">
               {currentRelatedProducts.map((product) => (
@@ -417,6 +425,7 @@ export default function Chat({ isVisible }) {
                   className="flex-shrink-0 px-4 py-3 bg-white border border-gray-200 
                            rounded-[8px] hover:border-blue-500 hover:shadow-sm 
                            transition-all duration-200 w-[280px]"
+                  style={{ scrollSnapAlign: 'start' }}
                 >
                   <div className="flex items-center justify-center">
                     <span className="text-sm font-medium text-gray-900 line-clamp-1 text-center">
@@ -428,11 +437,11 @@ export default function Chat({ isVisible }) {
             </div>
           </div>
 
-          {/* Right scroll button */}
+          {/* Right scroll button - now follows scroll */}
           <button
             onClick={() => scroll('right')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors"
-            style={{ transform: 'translate(50%, -50%)' }}
+            className="sticky right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 rounded-full p-2 shadow-md hover:bg-gray-100 transition-colors float-right"
+            style={{ marginLeft: 'auto' }}
           >
             <svg 
               className="w-5 h-5 text-gray-600" 
@@ -618,6 +627,50 @@ export default function Chat({ isVisible }) {
     );
   };
 
+  // Update autoResizeTextarea function
+  const autoResizeTextarea = (element) => {
+    if (!element) return;
+    
+    // Reset height to auto first
+    element.style.height = 'auto';
+    
+    const isMobile = window.innerWidth < 768;
+    const maxHeight = isMobile ? 200 : 100; // Different max heights
+    
+    // Calculate new height
+    const newHeight = Math.min(element.scrollHeight, maxHeight);
+    element.style.height = `${newHeight}px`;
+    
+    // Handle overflow
+    if (element.scrollHeight > maxHeight) {
+      element.style.overflowY = 'auto';
+    } else {
+      element.style.overflowY = 'hidden';
+    }
+  };
+
+  // Add useEffect for handling window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const textarea = document.querySelector('.question-textarea');
+      if (textarea) {
+        autoResizeTextarea(textarea);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Add useEffect for handling searchQuery changes
+  useEffect(() => {
+    const textarea = document.querySelector('.question-textarea');
+    if (textarea) {
+      autoResizeTextarea(textarea);
+    }
+  }, [searchQuery]);
+
+  // Update renderSearchBar function
   const renderSearchBar = () => (
     <div className="flex flex-col items-center w-full px-2 sm:px-0">
       {currentConversation.length === 0 && (
@@ -626,7 +679,7 @@ export default function Chat({ isVisible }) {
         </h1>
       )}
       <div className={cn(
-        "flex items-center bg-background",
+        "flex items-start bg-background",
         "border rounded-[8px]",
         "ring-offset-background",
         "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
@@ -636,12 +689,12 @@ export default function Chat({ isVisible }) {
           onClick={handleNewConversation}
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-l-xl"
+          className="h-8 w-8 rounded-l-xl mt-2 flex-shrink-0"
         >
           <PlusCircle className="h-4 w-4" />
         </Button>
 
-        <div className="relative" ref={dropdownRef}>
+        <div className="relative mt-2 flex-shrink-0" ref={dropdownRef}>
           <Button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             variant="ghost"
@@ -691,15 +744,14 @@ export default function Chat({ isVisible }) {
           )}
         </div>
 
-        <div className="h-5 w-px bg-border mx-1" />
+        <div className="h-5 w-px bg-border mx-1 mt-2 flex-shrink-0" />
         
-        <form onSubmit={handleSearch} className="flex-grow flex items-center">
+        <form onSubmit={handleSearch} className="flex-grow flex items-start min-w-0">
           <Textarea
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+              autoResizeTextarea(e.target);
             }}
             placeholder="Ask your question..."
             className={cn(
@@ -707,38 +759,34 @@ export default function Chat({ isVisible }) {
               "border-0 focus-visible:ring-0 focus-visible:ring-offset-0",
               "py-2 px-4",
               "text-base",
-              "min-h-[32px]",
-              "max-h-[120px]",
-              "transition-height duration-200",
+              "transition-all duration-200 ease-out",
               "placeholder:text-gray-500",
               "focus:placeholder:opacity-0",
-              "placeholder:pt-[6px]",
-              "pt-[10px]",
-              "leading-[1.5]",
-              "scrollable-textarea",
+              "resize-none",
+              "question-textarea",
               isLoading && currentConversation.length === 0 ? "opacity-50" : ""
             )}
-            disabled={false}
-            style={{ 
+            style={{
               resize: 'none',
-              overflowY: 'scroll',
               lineHeight: '1.5',
               caretColor: 'black',
               textAlign: 'left',
               paddingTop: '10px',
-              display: 'block',
-              minHeight: '42px',
+              paddingBottom: '10px',
               width: '100%',
               maxWidth: '100%',
               boxSizing: 'border-box',
               wordBreak: 'break-word',
               whiteSpace: 'pre-wrap',
               overflowWrap: 'break-word',
+              minHeight: '42px',
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleSearch(e);
+              } else {
+                autoResizeTextarea(e.target);
               }
             }}
           />
@@ -746,7 +794,7 @@ export default function Chat({ isVisible }) {
             type="submit"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-r-xl"
+            className="h-8 w-8 rounded-r-xl mt-2 flex-shrink-0"
             disabled={isLoading}
           >
             {isLoading ? (
@@ -1151,6 +1199,11 @@ const styles = `
     white-space: pre-wrap !important;
     overflow-wrap: break-word !important;
     word-wrap: break-word !important;
+    transition: height 0.2s ease-in-out !important;
+  }
+
+  .resize-none {
+    resize: none !important;
   }
 
   @keyframes pulseScale {
@@ -1207,6 +1260,123 @@ const styles = `
       padding-top: 48px;
     }
   }
+
+  .scroll-smooth {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  @media (hover: none) {
+    .hide-scrollbar {
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x mandatory;
+    }
+    
+    .hide-scrollbar > div > a {
+      scroll-snap-align: start;
+    }
+  }
+
+  .auto-expand-textarea {
+    overflow: hidden !important;
+    resize: none !important;
+    min-height: 42px !important;
+    max-height: none !important;
+    transition: height 0.1s ease-out !important;
+    padding-bottom: 8px !important;
+  }
+
+  .auto-expand-textarea:focus {
+    outline: none !important;
+  }
+
+  textarea {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.5;
+    white-space: pre-wrap !important;
+    overflow-wrap: break-word !important;
+    word-wrap: break-word !important;
+    box-sizing: border-box !important;
+    padding-bottom: 8px !important;
+  }
+
+  .flex-shrink-0 {
+    flex-shrink: 0 !important;
+  }
+
+  form.flex-grow {
+    min-width: 0;
+  }
+
+  /* Base styles for the textarea */
+  .question-textarea {
+    transition: height 0.2s ease-out !important;
+    min-height: 42px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Desktop styles */
+  @media (min-width: 768px) {
+    .question-textarea {
+      max-height: 100px !important;
+      overflow-y: auto !important;
+      scrollbar-width: thin !important;
+      scrollbar-color: rgba(0, 0, 0, 0.2) transparent !important;
+    }
+
+    .question-textarea::-webkit-scrollbar {
+      width: 6px !important;
+    }
+
+    .question-textarea::-webkit-scrollbar-track {
+      background: transparent !important;
+    }
+
+    .question-textarea::-webkit-scrollbar-thumb {
+      background-color: rgba(0, 0, 0, 0.2) !important;
+      border-radius: 3px !important;
+    }
+  }
+
+  /* Mobile styles */
+  @media (max-width: 767px) {
+    .question-textarea {
+      max-height: 200px !important;
+      overflow-y: auto !important;
+    }
+    
+    .question-textarea::-webkit-scrollbar {
+      width: 0px !important;
+      background: transparent !important;
+    }
+  }
+
+  /* Common styles */
+  .auto-expand-textarea {
+    font-family: inherit !important;
+    font-size: inherit !important;
+    line-height: 1.5 !important;
+    padding: 10px !important;
+  }
+
+  textarea {
+    font-family: inherit;
+    font-size: inherit;
+    line-height: 1.5;
+    white-space: pre-wrap !important;
+    overflow-wrap: break-word !important;
+    word-wrap: break-word !important;
+    box-sizing: border-box !important;
+  }
+
+  .flex-shrink-0 {
+    flex-shrink: 0 !important;
+  }
+
+  form.flex-grow {
+    min-width: 0;
+  }
 `;
 
 // Add the styles to the document
@@ -1255,3 +1425,14 @@ const productStyles = `
     overflow: hidden;
   }
 `;
+
+// Add this to handle FAQ questions
+const handleFAQSelect = (index) => {
+  setSearchQuery(randomQuestions[index]);
+  setTimeout(() => {
+    const textarea = document.querySelector('.question-textarea');
+    if (textarea) {
+      autoResizeTextarea(textarea);
+    }
+  }, 0);
+};
