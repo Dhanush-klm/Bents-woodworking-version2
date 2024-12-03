@@ -75,7 +75,6 @@ export default function Chat({ isVisible }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [currentConversation, setCurrentConversation] = useState([]);
-  const [currentRelatedProducts, setCurrentRelatedProducts] = useState([]);
   const [currentSourceVideos, setCurrentSourceVideos] = useState([]); // Add this line
   const [conversationHistory, setConversationHistory] = useState({
     "bents": [],
@@ -148,7 +147,6 @@ export default function Chat({ isVisible }) {
     fetchSessions();
     fetchInitialData();
     setCurrentConversation([]);
-    setCurrentRelatedProducts([]);
     setShowInitialQuestions(true);
     setShowCenterSearch(true);
     setIsSidebarOpen(false);
@@ -270,17 +268,19 @@ export default function Chat({ isVisible }) {
         timeout: 300000
       });
       
-      // Update related products from the response
-      if (response.data.related_products) {
-        setCurrentRelatedProducts(response.data.related_products.map(product => ({
-          id: product.id || uuidv4(), // Add id if not provided
-          title: product.title,
-          link: product.link
-        })));
-      }
+      // Process related products from the response
+      const responseProducts = response.data.related_products?.map(product => ({
+        id: product.id || uuidv4(),
+        title: product.title || '',
+        link: product.link || '',
+        description: product.description || '',
+        price: product.price || '',
+        category: product.category || ''
+      })) || [];
       
-      // Store conversation with related products
+      // Create new conversation with its own products
       const newConversation = {
+        id: uuidv4(), // Add unique ID for each conversation
         question: currentQuery,
         text: response.data.response,
         initial_answer: response.data.initial_answer,
@@ -288,13 +288,11 @@ export default function Chat({ isVisible }) {
         video_titles: response.data.video_titles || [],
         video_timestamps: response.data.video_timestamps || {},
         videoLinks: response.data.video_links || {},
-        related_products: (response.data.related_products || []).map(product => ({
-          title: product.title,
-          link: product.link
-        })),
+        related_products: responseProducts, // Store products specific to this conversation
         timestamp: new Date().toISOString()
       };
       
+      // Update current conversation while preserving previous conversations' products
       setCurrentConversation(prev => [...prev, newConversation]);
       
       // Update sessions
@@ -310,22 +308,10 @@ export default function Chat({ isVisible }) {
         });
       });
 
-      // Only clear the search query after the response is received
       setSearchQuery("");
-
-      // After setting the new conversation, scroll to the latest response
-      setTimeout(() => {
-        if (latestConversationRef.current) {
-          latestConversationRef.current.scrollIntoView({ 
-            behavior: 'smooth',
-            block: 'start'
-          });
-        }
-      }, 100);
 
     } catch (error) {
       console.error("Error fetching response:", error);
-      // Optionally clear the search query on error
       setSearchQuery("");
     } finally {
       clearInterval(progressInterval);
@@ -349,7 +335,6 @@ export default function Chat({ isVisible }) {
     if (currentSession && currentSession.conversations.length === 0) {
       // If current session is empty, just reset the state without creating a new session
       setCurrentConversation([]);
-      setCurrentRelatedProducts([]);
       setShowInitialQuestions(true);
       setShowCenterSearch(true);
       return;
@@ -360,14 +345,13 @@ export default function Chat({ isVisible }) {
     setSessions(prevSessions => [...prevSessions, newSession]);
     setCurrentSessionId(newSessionId);
     setCurrentConversation([]);
-    setCurrentRelatedProducts([]);
     setShowInitialQuestions(true);
     setShowCenterSearch(true);
   };
 
   // Update the renderRelatedProducts function
-  const renderRelatedProducts = () => {
-    if (!currentRelatedProducts || currentRelatedProducts.length === 0) return null;
+  const renderRelatedProducts = (products) => {
+    if (!products || products.length === 0) return null;
 
     return (
       <div className="mb-6">
@@ -381,20 +365,39 @@ export default function Chat({ isVisible }) {
             className="overflow-x-auto custom-scrollbar scroll-smooth"
           >
             <div className="flex gap-4 pb-3 min-w-min">
-              {currentRelatedProducts.map((product) => (
+              {products.map((product) => (
                 <a
                   key={product.id}
                   href={product.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-shrink-0 px-4 py-3 bg-white border border-gray-200 
+                  className="flex-shrink-0 px-6 py-4 bg-white border border-gray-200 
                            rounded-[8px] hover:border-blue-500 hover:shadow-sm 
-                           transition-all duration-200 w-[280px] cursor-pointer"
+                           transition-all duration-200 w-[300px] cursor-pointer"
                 >
-                  <div className="flex items-center justify-center">
-                    <span className="text-sm font-medium text-gray-900 line-clamp-1 text-center">
-                      {product.title}
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-900 line-clamp-1">
+                        {product.title}
+                      </span>
+                      {product.price && (
+                        <span className="text-sm font-semibold text-blue-600">
+                          {product.price}
+                        </span>
+                      )}
+                    </div>
+                    {product.description && (
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {product.description}
+                      </p>
+                    )}
+                    {product.category && (
+                      <div className="flex items-center">
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                          {product.category}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </a>
               ))}
@@ -779,7 +782,6 @@ export default function Chat({ isVisible }) {
                 setShowInitialQuestions(false);
                 setShowCenterSearch(false);
                 setIsSidebarOpen(false);
-                setCurrentRelatedProducts([]); // Reset related products when switching sessions
               }}
             >
               {session.conversations && session.conversations.length > 0 ? (
@@ -936,7 +938,7 @@ export default function Chat({ isVisible }) {
                         <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900">
                           Watch Full Video
                         </span>
-                      </a>
+                      </a>  
                     </div>
                   </div>
                 );
@@ -951,7 +953,7 @@ export default function Chat({ isVisible }) {
   // Update the renderConversation function to include both products and videos
   const renderConversation = (conv, index) => (
     <div 
-      key={index} 
+      key={conv.id} // Use conversation's unique ID as key
       className={cn(
         "bg-white p-6 rounded-[8px] shadow mb-4 break-words whitespace-normal",
         index === 0 ? "mt-4" : ""
@@ -962,7 +964,12 @@ export default function Chat({ isVisible }) {
       <div className="mb-4 break-words whitespace-normal">
         {formatResponse(conv.text || '', conv.videoLinks)}
       </div>
-      {renderRelatedProducts()}
+      {/* Render products specific to this conversation */}
+      {conv.related_products && conv.related_products.length > 0 && (
+        <div className="mt-4">
+          {renderRelatedProducts(conv.related_products)}
+        </div>
+      )}
       {renderSourceVideos(conv.videoLinks)}
     </div>
   );
