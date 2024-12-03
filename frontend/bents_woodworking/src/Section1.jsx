@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MessageSquare, LayoutDashboard } from 'lucide-react';
 import axios from "axios";
+import { cn } from './lib/utils';
 
 function ToolRecommendationLogo({ className = "w-12 h-12" }) {
   return (
@@ -42,10 +43,50 @@ function ToolRecommendationLogo({ className = "w-12 h-12" }) {
 
 function FeatureCard({ icon, title, description }) {
   return (
-    <div className="bg-gray-100 p-6 rounded-[8px] shadow-md">
-      <div className="text-black mb-4">{icon}</div>
-      <h3 className="text-black text-xl font-semibold mb-2">{title}</h3>
-      <p className="text-gray-700">{description}</p>
+    <div className={cn(
+      "bg-gray-100 p-6 rounded-[8px]",
+      "transform transition-all duration-300 ease-in-out",
+      "hover:shadow-lg hover:scale-[1.02]",
+      "border border-transparent",
+      "hover:border-blue-200",
+      "bg-gradient-to-br from-white to-gray-50",
+      "hover:from-blue-50 hover:to-white",
+      "group relative overflow-hidden",
+      "after:absolute after:inset-0 after:opacity-0",
+      "after:transition-opacity after:duration-300",
+      "after:bg-gradient-to-br after:from-blue-100/20 after:to-transparent",
+      "hover:after:opacity-100"
+    )}>
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 
+                    pointer-events-none transition-opacity duration-300
+                    bg-gradient-to-r from-transparent via-white/10 to-transparent
+                    transform -translate-x-full group-hover:translate-x-full
+                    motion-reduce:transition-none motion-reduce:hover:transform-none" 
+           style={{ transition: 'transform 1s ease-in-out' }}
+      />
+
+      <div className={cn(
+        "text-black mb-4 transform transition-transform duration-300",
+        "group-hover:scale-110 group-hover:text-blue-600"
+      )}>
+        {icon}
+      </div>
+
+      <h3 className={cn(
+        "text-black text-xl font-semibold mb-2",
+        "transform transition-colors duration-300",
+        "group-hover:text-blue-700"
+      )}>
+        {title}
+      </h3>
+
+      <p className={cn(
+        "text-gray-700",
+        "transition-colors duration-300",
+        "group-hover:text-gray-900"
+      )}>
+        {description}
+      </p>
     </div>
   );
 }
@@ -102,11 +143,63 @@ export default function Section1() {
             Your AI-powered companion for all things woodworking. Get expert advice, tool recommendations, and shop improvement tips.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Link to="/chat" className="inline-block bg-[rgba(23,155,215,255)] text-black font-semibold py-3 px-6 w-48 rounded-[8px] hover:bg-[rgba(20,139,193,255)] transition duration-300">
-              Start Chatting
+            <Link 
+              to="/chat" 
+              className={cn(
+                // Base styles
+                "inline-block bg-[rgba(23,155,215,255)] text-black font-semibold",
+                "py-3 px-6 w-full sm:w-48 rounded-[8px]", // Updated width for mobile
+                // Enhanced mobile touch states
+                "touch-manipulation", // Optimize for touch
+                // Hover and touch effects
+                "hover:bg-[rgba(20,139,193,255)] active:bg-[rgba(18,125,174,255)]",
+                "transform transition-all duration-300 ease-in-out",
+                "hover:scale-105 active:scale-95",
+                "hover:shadow-lg active:shadow-inner",
+                // Gradient and glow effects
+                "relative overflow-hidden group",
+                "hover:ring-2 hover:ring-blue-300 hover:ring-opacity-50",
+                // Shine effect
+                "before:absolute before:inset-0",
+                "before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+                "before:translate-x-[-200%] before:transition-transform before:duration-700",
+                "hover:before:translate-x-[200%]",
+                // Mobile tap highlight
+                "tap-highlight-transparent",
+                // Focus states
+                "focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-50"
+              )}>
+              <span className="relative z-10">Start Chatting</span>
             </Link>
-            <Link to="/shop" className="inline-block bg-black text-white font-semibold py-3 px-6 w-48 rounded-[8px] border-2 border-white hover:bg-white hover:text-black transition duration-300">
-              Shop Now
+
+            <Link 
+              to="/shop" 
+              className={cn(
+                // Base styles
+                "inline-block bg-black text-white font-semibold",
+                "py-3 px-6 w-full sm:w-48 rounded-[8px]", // Updated width for mobile
+                "border-2 border-white",
+                // Enhanced mobile touch states
+                "touch-manipulation",
+                // Hover and touch effects
+                "hover:bg-white hover:text-black active:bg-gray-100",
+                "transform transition-all duration-300 ease-in-out",
+                "hover:scale-105 active:scale-95",
+                "hover:shadow-lg active:shadow-inner",
+                // Gradient and glow effects
+                "relative overflow-hidden group",
+                "hover:ring-2 hover:ring-white hover:ring-opacity-50",
+                // Shine effect
+                "before:absolute before:inset-0",
+                "before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent",
+                "before:translate-x-[-200%] before:transition-transform before:duration-700",
+                "hover:before:translate-x-[200%]",
+                // Mobile tap highlight
+                "tap-highlight-transparent",
+                // Focus states
+                "focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+              )}>
+              <span className="relative z-10">Shop Now</span>
             </Link>
           </div>
         </div>
