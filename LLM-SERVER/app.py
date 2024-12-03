@@ -7,55 +7,344 @@ from werkzeug.utils import secure_filename
 from docx import Document
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_pinecone import PineconeVectorStore
 from langchain.chains import ConversationalRetrievalChain
 from langchain.schema import Document as LangchainDocument
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from pinecone import Pinecone, ServerlessSpec
+import langsmith
 from flask_cors import CORS
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import base64
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
+import time
 import json
 
-# Load environment variables
+
+class LLMResponseError(Exception):
+    pass
+
+class LLMResponseCutOff(LLMResponseError):
+    pass
+
+class LLMNoResponseError(LLMResponseError):
+    pass
+
 load_dotenv()
 
-# Initialize Flask app
-app = Flask(__name__, template_folder='templates', static_folder='static')
+app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002","https://bents-frontend-server.vercel.app","https://bents-backend-server.vercel.app"]}})
 
-app.secret_key = os.urandom(24)
+app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Initialize OpenAI components
+# Access your API keys (set these in environment variables)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+TRANSCRIPT_INDEX_NAMES = ["bents", "shop-improvement", "tool-recommendations"]
+PRODUCT_INDEX_NAME = "bents-woodworking-products"
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+os.environ["LANGCHAIN_PROJECT"] = "jason-json"
+
+# Initialize Langchain components
 embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
 llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4o-mini", temperature=0)
 
+# Initialize Pinecone
+pc = Pinecone(api_key=PINECONE_API_KEY)
+
+# Create or connect to the Pinecone indexes
+for INDEX_NAME in TRANSCRIPT_INDEX_NAMES + [PRODUCT_INDEX_NAME]:
+    if INDEX_NAME not in pc.list_indexes().names():
+        pc.create_index(
+            name=INDEX_NAME,
+            dimension=1536,  # OpenAI embeddings dimension
+            metric='cosine',
+            spec=ServerlessSpec(cloud='aws', region='us-east-1')
+        )
+
+# Create VectorStores
+transcript_vector_stores = {name: PineconeVectorStore(index=pc.Index(name), embedding=embeddings, text_key="text") for name in TRANSCRIPT_INDEX_NAMES}
+product_vector_store = PineconeVectorStore(index=pc.Index(PRODUCT_INDEX_NAME), embedding=embeddings, text_key="tags")
+
 # System instructions
 SYSTEM_INSTRUCTIONS = """You are an AI assistant specialized in information retrieval from text documents.
-    Always provide your responses in English, regardless of the language of the input or context.
-    When given a document and a query:
-    1. Analyze the document content and create an efficient index of key terms, concepts, and their locations within the text.
-    2. When a query is received, use the index to quickly locate relevant sections of the document.
-    3. Extract the most relevant information from those sections to form a concise and accurate answer.
-    4. Always include the exact relevant content from the document, starting from the beginning of the relevant section. Use quotation marks to denote direct quotes.
-    5. If applicable, provide a timestamp or location reference for where the information was found in the original document.
-    6. After providing the direct quote, summarize or explain the answer if necessary.
-    7. If the query cannot be answered from the given document, state this clearly.
-    8. Always prioritize accuracy over speed. If you're not certain about an answer, say so.
-    9. For multi-part queries, address each part separately and clearly.
-    10. Aim to provide responses within seconds, even for large documents.
-    11. Do not include timestamps in your response text. Focus on providing clear, direct answers.
-    12. Do not include any URLs in your response. Just provide the timestamps in the specified format.
-    13. When referencing timestamps that may be inaccurate, you can use language like "around", "approximately", or "in the vicinity of" to indicate that the exact moment may vary slightly.
-    Remember, always respond in English, even if the query or context is in another language.
-    Always represent the speaker as Jason bent. You are an assistant expert representing Jason Bent on woodworking response."""
+        Always provide your responses in English, regardless of the language of the input or context.
+        When given a document and a query:
+        1. Analyze the document content and create an efficient index of key terms, concepts, and their locations within the text.
+        2. When a query is received, use the index to quickly locate relevant sections of the document.
+        3. Extract the most relevant information from those sections to form a concise and accurate answer.
+        4. Always include the exact relevant content from the document, starting from the beginning of the relevant section. Use quotation marks to denote direct quotes.
+        5. If applicable, provide a timestamp or location reference for where the information was found in the original document.
+        6. After providing the direct quote, summarize or explain the answer if necessary.
+        7. If the query cannot be answered from the given document, state this clearly.
+        8. Always prioritize accuracy over speed. If you're not certain about an answer, say so.
+        9. For multi-part queries, address each part separately and clearly.
+        10. Aim to provide responses within seconds, even for large documents.
+        11. Do not include timestamps in your response text. Focus on providing clear, direct answers.
+        12. Do not include any URLs in your response. Just provide the timestamps in the specified format.
+        13. When referencing timestamps that may be inaccurate, you can use language like "around", "approximately", or "in the vicinity of" to indicate that the exact moment may vary slightly.
+        Remember, always respond in English, even if the query or context is in another language.
+        Always represent the speaker as Jason bent.You are an assistant expert representing Jason Bent as jason bent on woodworking response. Answer questions based on the provided context. The context includes timestamps in the format [Timestamp: HH:MM:SS]. When referencing information, include these timestamps in the format {{timestamp:HH:MM:SS}}.
+Then show that is in generated response with the provided context.
+"""
 
-def check_query_relevance(user_query, chat_history):
-    """Check if the query is relevant to woodworking or is a greeting/general conversation."""
+logging.basicConfig(level=logging.DEBUG)
+
+def rewrite_query(query, chat_history=None):
+    """
+    Rewrites the user query to be more specific and searchable using LLM.
+    """
     try:
+        # Create prompt that's compatible with the existing LLM setup
+        rewrite_prompt = f"""As bent's woodworks assistant, rewrite this query to be more specific 
+        and searchable for woodworking content. Add relevant terminology and context while maintaining 
+        the original intent. Only return the rewritten query without any explanations.
+
+        Original query: {query}
+        
+        Chat history: {json.dumps(chat_history) if chat_history else '[]'}
+        
+        Rewritten query:"""
+        
+        # Use the existing LLM instance
+        response = llm.predict(rewrite_prompt)
+        
+        # Clean up the response
+        cleaned_response = response.replace("Rewritten query:", "").strip()
+        
+        # Add logging consistent with existing code style
+        logging.debug(f"Original query: {query}")
+        logging.debug(f"Rewritten query: {cleaned_response}")
+        
+        return cleaned_response if cleaned_response else query
+        
+    except Exception as e:
+        logging.error(f"Error in query rewriting: {str(e)}", exc_info=True)
+        return query  # Fallback to original query
+
+def get_matched_products(video_title):
+    logging.debug(f"Attempting to get matched products for title: {video_title}")
+    try:
+        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT id, title, tags, link FROM products 
+                WHERE LOWER(tags) LIKE LOWER(%s)
+            """
+            search_term = f"%{video_title}%"
+            logging.debug(f"Executing SQL query: {query} with search term: {search_term}")
+            cur.execute(query, (search_term,))
+            matched_products = cur.fetchall()
+            logging.debug(f"Raw matched products from database: {matched_products}")
+        conn.close()
+
+        related_products = [
+            {
+                'id': product['id'],
+                'title': product['title'],
+                'tags': product['tags'].split(',') if product['tags'] else [],
+                'link': product['link']
+            } for product in matched_products
+        ]
+
+        logging.debug(f"Processed related products: {related_products}")
+        return related_products
+
+    except Exception as e:
+        logging.error(f"Error in get_matched_products: {str(e)}", exc_info=True)
+        return []
+def verify_database():
+    try:
+        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT COUNT(*) FROM products")
+            count = cur.fetchone()['count']
+            logging.info(f"Total products in database: {count}")
+            
+            cur.execute("SELECT title FROM products LIMIT 5")
+            sample_titles = [row['title'] for row in cur.fetchall()]
+            logging.info(f"Sample product titles: {sample_titles}")
+        conn.close()
+        return True
+    except Exception as e:
+        logging.error(f"Database verification failed: {str(e)}", exc_info=True)
+        return False
+
+def process_answer(answer, urls, source_documents):
+    def extract_context(text, timestamp_pos, window=150):
+        start = max(0, timestamp_pos - window)
+        end = min(len(text), timestamp_pos + window)
+        return text[start:end].strip()
+
+    def generate_description(context, timestamp):
+        description_prompt = f"""
+        Given this woodworking video context at {timestamp}, create an extremely concise action phrase (max 6-8 words).
+
+        Context: {context}
+
+        Rules:
+        1. Start with an action verb
+        2. Name the specific tool/technique
+        3. Must be 6-8 words only
+        4. Focus on the single main action
+        5. Be direct and clear
+
+        Example formats:
+        - "Demonstrates table saw fence alignment technique"
+        - "Installs dust collection system components"
+        - "Shows track saw cutting method"
+
+        Description:"""
+
+        try:
+            enhanced_description = llm.predict(description_prompt).strip()
+            words = enhanced_description.split()[:8]
+            return ' '.join(words)
+        except Exception as e:
+            logging.error(f"Error generating description: {str(e)}")
+            return ' '.join(context.split()[:6])
+
+    def replace_timestamp(match, source_index, source_documents):
+        timestamp = match.group(1)
+        timestamp_pos = match.start()
+        context = extract_context(answer, timestamp_pos)
+        
+        current_url = urls[source_index] if source_index < len(urls) else None
+        current_metadata = source_documents[source_index].metadata if source_index < len(source_documents) else {}
+        current_title = current_metadata.get('title', "Unknown Video")
+        
+        enhanced_description = generate_description(context, timestamp)
+        
+        full_urls = [combine_url_and_timestamp(current_url, timestamp)] if current_url else []
+        
+        return {
+            'links': full_urls,
+            'timestamp': timestamp,
+            'description': enhanced_description,
+            'video_title': current_title
+        }
+    
+    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
+    timestamps_with_context = [
+        replace_timestamp(match, i, source_documents) 
+        for i, match in enumerate(timestamp_matches)
+    ]
+    
+    video_dict = {
+        f'[video{i}]': {
+            'urls': entry['links'],
+            'timestamp': entry['timestamp'],
+            'description': entry['description'],
+            'video_title': entry['video_title']
+        }
+        for i, entry in enumerate(timestamps_with_context)
+    }
+    
+    processed_answer = answer
+    for i, match in enumerate(timestamp_matches):
+        placeholder = f'[video{i}]'
+        processed_answer = processed_answer.replace(match.group(0), placeholder)
+    
+    return processed_answer, video_dict
+
+def combine_url_and_timestamp(base_url, timestamp):
+    parts = timestamp.split(':')
+    if len(parts) == 2:
+        minutes, seconds = map(int, parts)
+        total_seconds = minutes * 60 + seconds
+    elif len(parts) == 3:
+        hours, minutes, seconds = map(int, parts)
+        total_seconds = hours * 3600 + minutes * 60 + seconds
+    else:
+        raise ValueError("Invalid timestamp format")
+
+    if '?' in base_url:
+        return f"{base_url}&t={total_seconds}"
+    else:
+        return f"{base_url}?t={total_seconds}"
+
+def extract_text_from_docx(file):
+    doc = Document(file)
+    text = "\n".join([para.text for para in doc.paragraphs])
+    return text
+
+def extract_metadata_from_text(text):
+    title = text.split('\n')[0] if text else "Untitled Video"
+    return {"title": title}
+
+def upsert_transcript(transcript_text, metadata, index_name):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    chunks = text_splitter.split_text(transcript_text)
+    
+    documents = []
+    for i, chunk in enumerate(chunks):
+        chunk_metadata = metadata.copy()
+        chunk_metadata['chunk_id'] = f"{metadata['title']}_chunk_{i}"
+        chunk_metadata['url'] = metadata.get('url', '')
+        chunk_metadata['title'] = metadata.get('title', 'Unknown Video')
+        documents.append(LangchainDocument(page_content=chunk, metadata=chunk_metadata))
+    
+    transcript_vector_stores[index_name].add_documents(documents)
+
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2), retry=retry_if_exception_type(LLMResponseError))
+def retry_llm_call(qa_chain, query, chat_history):
+    try:
+        result = qa_chain({"question": query, "chat_history": chat_history})
+        
+        if result is None or 'answer' not in result or not result['answer']:
+            raise LLMNoResponseError("LLM failed to generate a response")
+        
+        if result['answer'].endswith('...') or len(result['answer']) < 20:
+            raise LLMResponseCutOff("LLM response appears to be cut off")
+        return result
+    except Exception as e:
+        if isinstance(e, LLMResponseError):
+            logging.error(f"LLM call failed: {str(e)}")
+            raise
+        logging.error(f"Unexpected error in LLM call: {str(e)}")
+        raise LLMNoResponseError("LLM failed due to an unexpected error")
+
+
+
+@app.route('/')
+@app.route('/database')
+def serve_spa():
+    return render_template('index.html')
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.json
+        logging.debug(f"Received data: {data}")
+
+        user_query = data['message'].strip()
+        selected_index = data['selected_index']
+        chat_history = data.get('chat_history', [])
+
+        logging.debug(f"Chat history received: {chat_history}")
+
+        # Initial input validation
+        if not user_query or user_query in ['.', ',', '?', '!']:
+            return jsonify({
+                'response': "I'm sorry, but I didn't receive a valid question. Could you please ask a complete question?",
+                'related_products': [],
+                'urls': [],
+                'contexts': [],
+                'video_links': {}
+            })
+
+        # Format chat history for ConversationalRetrievalChain
+        formatted_history = []
+        for i in range(0, len(chat_history) - 1, 2):
+            human = chat_history[i]
+            ai = chat_history[i + 1] if i + 1 < len(chat_history) else ""
+            formatted_history.append((human, ai))
+
+        # First, check relevance before query rewriting
         relevance_check_prompt = f"""
         Given the following question or message and the chat history, determine if it is:
         1. A greeting or send-off like "thankyou" or "goodbye" or messages or casual messages like 'hey' or 'hello' or general conversation starter
@@ -72,312 +361,131 @@ def check_query_relevance(user_query, chat_history):
         If it falls under category 6, respond with 'NOT RELEVANT'.
 
         Chat History:
-        {chat_history[-3:] if chat_history else "No previous context"}
+        {formatted_history[-3:] if formatted_history else "No previous context"}
 
         Current Question: {user_query}
         
         Response (GREETING, RELEVANT, INAPPROPRIATE, or NOT RELEVANT):
         """
         
-        relevance_response = llm.predict(relevance_check_prompt).strip().upper()
+        relevance_response = llm.predict(relevance_check_prompt)
         
-        if relevance_response == "GREETING":
-            greeting_prompt = f"Generate a friendly greeting response for a woodworking assistant in response to: '{user_query}'"
+        # Handle non-relevant cases first
+        if "GREETING" in relevance_response.upper():
             try:
-                return "GREETING", llm.predict(greeting_prompt)
+                greeting_prompt = f"Generate a friendly greeting response for a woodworking assistant in response to: '{user_query}'"
+                greeting_response = llm.predict(greeting_prompt)
+                return jsonify({
+                    'response': greeting_response,
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
             except Exception as e:
-                return "GREETING", "Hello! I'm Jason Bent's woodworking assistant. How can I help you today?"
-                
-        elif relevance_response == "INAPPROPRIATE":
-            decline_prompt = f"Generate a polite response declining to answer the inappropriate query: '{user_query}' and redirect to woodworking topics"
+                logging.error(f"Error generating greeting: {str(e)}")
+                return jsonify({
+                    'response': f"Hello! I'm Jason Bent's woodworking assistant. How can I help you today?",
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
+        elif "INAPPROPRIATE" in relevance_response.upper():
+            inappropriate_prompt = f"Generate a polite response declining to answer the inappropriate query: '{user_query}' and redirect to woodworking topics"
             try:
-                return "INAPPROPRIATE", llm.predict(decline_prompt)
+                decline_response = llm.predict(inappropriate_prompt)
+                return jsonify({
+                    'response': decline_response,
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
             except Exception as e:
-                return "INAPPROPRIATE", "I'm sorry, but I can only assist with appropriate woodworking and home improvement related topics."
-                
-        elif relevance_response == "NOT RELEVANT":
-            redirect_prompt = f"Generate a polite response explaining why the query: '{user_query}' is not relevant to woodworking and redirect to appropriate topics"
+                return jsonify({
+                    'response': "I'm sorry, but this is outside my context of answering. Is there something else I can help you with regarding woodworking, tools, or home improvement?",
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
+        elif "NOT RELEVANT" in relevance_response.upper():
+            irrelevant_prompt = f"Generate a polite response explaining why the query: '{user_query}' is not relevant to woodworking and redirect to appropriate topics"
             try:
-                return "NOT RELEVANT", llm.predict(redirect_prompt)
+                redirect_response = llm.predict(irrelevant_prompt)
+                return jsonify({
+                    'response': redirect_response,
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
             except Exception as e:
-                return "NOT RELEVANT", "I'm specialized in topics related to woodworking, tools, and home improvement. Could you please ask a question related to these topics?"
-                
-        else:  # RELEVANT
-            return "RELEVANT", None
+                return jsonify({
+                    'response': "I'm sorry, but I'm specialized in topics related to our company, woodworking, tools, and home improvement. Could you please ask a question related to these topics?",
+                    'related_products': [],
+                    'urls': [],
+                    'contexts': [],
+                    'video_links': {}
+                })
 
-    except Exception as e:
-        logging.error(f"Error in relevance check: {str(e)}")
-        return "ERROR", "I'm having trouble processing your request. Could you please try asking about woodworking or home improvement topics?"
-
-def rewrite_query(query, chat_history=None):
-    """Rewrite the query to be more specific and searchable."""
-    try:
-        rewrite_prompt = f"""As bent's woodworks assistant, rewrite this query to be more specific 
-        and searchable for woodworking content. Add relevant terminology and context while maintaining 
-        the original intent. Only return the rewritten query without any explanations.
-
-        Original query: {query}
-        
-        Chat history: {json.dumps(chat_history) if chat_history else '[]'}
-        
-        Rewritten query:"""
-        
-        response = llm.predict(rewrite_prompt)
-        cleaned_response = response.replace("Rewritten query:", "").strip()
-        
-        logging.debug(f"Original query: {query}")
-        logging.debug(f"Rewritten query: {cleaned_response}")
-        
-        return cleaned_response if cleaned_response else query
-        
-    except Exception as e:
-        logging.error(f"Error in query rewriting: {str(e)}", exc_info=True)
-        return query
-
-def get_relevant_content(query, cur):
-    """Get relevant content from specific tables using vector similarity search"""
-    try:
-        query_embedding = embeddings.embed_query(query)
-        
-        # Modified query to search across multiple tables
-        similarity_query = """
-            (SELECT id, chunk_id, text, title, url, vector,
-                   (vector <=> $1) as similarity_score
-            FROM bents
-            WHERE vector IS NOT NULL)
-            UNION ALL
-            (SELECT id, chunk_id, text, title, url, vector,
-                   (vector <=> $1) as similarity_score
-            FROM shop_improvement
-            WHERE vector IS NOT NULL)
-            UNION ALL
-            (SELECT id, chunk_id, text, title, url, vector,
-                   (vector <=> $1) as similarity_score
-            FROM tool_recommendations
-            WHERE vector IS NOT NULL)
-            ORDER BY similarity_score
-            LIMIT 5;
-        """
-        
-        cur.execute(similarity_query, (query_embedding,))
-        similar_chunks = cur.fetchall()
-        
-        documents = []
-        for chunk in similar_chunks:
-            doc = LangchainDocument(
-                page_content=chunk['text'],
-                metadata={
-                    'chunk_id': chunk['chunk_id'],
-                    'title': chunk['title'],
-                    'url': chunk['url']
-                }
-            )
-            documents.append(doc)
-        
-        return documents
-    except Exception as e:
-        logging.error(f"Error in get_relevant_content: {str(e)}")
-        return []
-
-def get_matched_products(video_title):
-    """Get matched products from database based on video title."""
-    try:
-        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            query = """
-                SELECT id, title, tags, link 
-                FROM products 
-                WHERE LOWER(tags) LIKE LOWER(%s)
-            """
-            cur.execute(query, (f"%{video_title}%",))
-            matched_products = cur.fetchall()
-        conn.close()
-
-        return [{
-            'id': product['id'],
-            'title': product['title'],
-            'tags': product['tags'].split(',') if product['tags'] else [],
-            'link': product['link']
-        } for product in matched_products]
-    except Exception as e:
-        logging.error(f"Error in get_matched_products: {str(e)}")
-        return []
-
-def process_answer(answer, urls, source_documents):
-    """Process answer to include video links and timestamps."""
-    def extract_context(text, timestamp_pos, window=150):
-        start = max(0, timestamp_pos - window)
-        end = min(len(text), timestamp_pos + window)
-        return text[start:end].strip()
-
-    def generate_description(context, timestamp):
-        description_prompt = f"""
-        Given this woodworking video context at {timestamp}, create an extremely concise action phrase (max 6-8 words).
-        Context: {context}
-        Description:"""
-
-        try:
-            enhanced_description = llm.predict(description_prompt).strip()
-            words = enhanced_description.split()[:8]
-            return ' '.join(words)
-        except Exception as e:
-            logging.error(f"Error generating description: {str(e)}")
-            return ' '.join(context.split()[:6])
-
-    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
-    timestamps_with_context = []
-    
-    for i, match in enumerate(timestamp_matches):
-        timestamp = match.group(1)
-        timestamp_pos = match.start()
-        context = extract_context(answer, timestamp_pos)
-        
-        current_url = urls[i] if i < len(urls) else None
-        current_metadata = source_documents[i].metadata if i < len(source_documents) else {}
-        current_title = current_metadata.get('title', "Unknown Video")
-        
-        enhanced_description = generate_description(context, timestamp)
-        
-        timestamps_with_context.append({
-            'links': [f"{current_url}?t={timestamp}"] if current_url else [],
-            'timestamp': timestamp,
-            'description': enhanced_description,
-            'video_title': current_title
-        })
-    
-    video_dict = {
-        f'[video{i}]': entry
-        for i, entry in enumerate(timestamps_with_context)
-    }
-    
-    processed_answer = answer
-    for i, match in enumerate(timestamp_matches):
-        processed_answer = processed_answer.replace(match.group(0), f'[video{i}]')
-    
-    return processed_answer, video_dict
-
-def verify_database():
-    """Verify database connection and content."""
-    try:
-        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT COUNT(*) FROM bents")
-            count = cur.fetchone()['count']
-            logging.info(f"Total records in bents table: {count}")
-            
-            cur.execute("SELECT title FROM bents LIMIT 5")
-            sample_titles = [row['title'] for row in cur.fetchall()]
-            logging.info(f"Sample titles: {sample_titles}")
-        conn.close()
-        return True
-    except Exception as e:
-        logging.error(f"Database verification failed: {str(e)}")
-        return False
-
-def extract_text_from_docx(file):
-    """Extract text content from a DOCX file."""
-    doc = Document(file)
-    text = "\n".join([para.text for para in doc.paragraphs])
-    return text
-
-def extract_metadata_from_text(text):
-    """Extract metadata from transcript text."""
-    title = text.split('\n')[0] if text else "Untitled Video"
-    return {"title": title}
-
-# Main chat endpoint
-@app.route('/chat', methods=['POST'])
-def chat():
-    try:
-        data = request.json
-        user_query = data['message'].strip()
-        chat_history = data.get('chat_history', [])
-
-        # Initial input validation
-        if not user_query or user_query in ['.', ',', '?', '!']:
-            return jsonify({
-                'response': "I'm sorry, but I didn't receive a valid question. Could you please ask a complete question?",
-                'related_products': [],
-                'urls': [],
-                'contexts': [],
-                'video_links': {}
-            })
-
-        # Format chat history
-        formatted_history = []
-        for i in range(0, len(chat_history) - 1, 2):
-            human = chat_history[i]
-            ai = chat_history[i + 1] if i + 1 < len(chat_history) else ""
-            formatted_history.append((human, ai))
-
-        # Check query relevance
-        relevance_type, direct_response = check_query_relevance(user_query, formatted_history)
-        
-        if relevance_type != "RELEVANT":
-            return jsonify({
-                'response': direct_response,
-                'related_products': [],
-                'urls': [],
-                'contexts': [],
-                'video_links': {}
-            })
-
-        # Rewrite query for better search
+        # Only proceed with query rewriting if the query is relevant
         rewritten_query = rewrite_query(user_query, formatted_history)
+        logging.debug(f"Query rewritten from '{user_query}' to '{rewritten_query}'")
 
-        # Connect to database and get relevant content
-        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        
-        source_documents = get_relevant_content(rewritten_query, cur)
-
-        # Prepare context and create QA chain
-        context = "\n".join([doc.page_content for doc in source_documents])
+        # Continue with existing retrieval and response generation logic
+        retriever = transcript_vector_stores[selected_index].as_retriever(search_kwargs={"k": 5})
         
         prompt = ChatPromptTemplate.from_messages([
             SystemMessagePromptTemplate.from_template(SYSTEM_INSTRUCTIONS),
-            HumanMessagePromptTemplate.from_template(
-                "Context: {context}\n\nChat History: {chat_history}\n\nQuestion: {question}"
-            )
+            HumanMessagePromptTemplate.from_template("Context: {context}\n\nChat History: {chat_history}\n\nQuestion: {question}")
         ])
-
+        
         qa_chain = ConversationalRetrievalChain.from_llm(
             llm=llm,
-            retriever=None,
-            combine_docs_chain_kwargs={"prompt": prompt}
+            retriever=retriever,
+            combine_docs_chain_kwargs={"prompt": prompt},
+            return_source_documents=True
         )
+        
+        try:
+            result = retry_llm_call(qa_chain, rewritten_query, formatted_history)
+        except LLMResponseError as e:
+            error_message = "Failed to get a complete response from the AI after multiple attempts."
+            if isinstance(e, LLMNoResponseError):
+                error_message = "The AI failed to generate a response after multiple attempts."
+            return jsonify({'error': error_message}), 500
+        except Exception as e:
+            logging.error(f"Unexpected error in LLM call: {str(e)}")
+            return jsonify({'error': 'An unexpected error occurred while processing your request.'}), 500
 
-        # Generate response
-        result = qa_chain({
-            "question": rewritten_query,
-            "chat_history": formatted_history,
-            "context": context
-        })
+        initial_answer = result['answer']
+        display_answer = re.sub(r'\{timestamp:[^\}]+\}', '', initial_answer)
+        
+        contexts = [doc.page_content for doc in result['source_documents']]
+        source_documents = result['source_documents']
 
-        # Extract metadata and process answer
+        # Extract video titles and URLs from all source documents
         video_titles = []
         urls = []
-        contexts = []
         for doc in source_documents:
             metadata = doc.metadata
             video_titles.append(metadata.get('title', "Unknown Video"))
             urls.append(metadata.get('url', None))
-            contexts.append(doc.page_content)
 
-        processed_answer, video_dict = process_answer(
-            result['answer'],
-            urls,
-            source_documents
-        )
+        logging.debug(f"Extracted video titles: {video_titles}")
+        logging.debug(f"Extracted URLs: {urls}")
 
-        # Get related products
-        related_products = get_matched_products(
-            video_titles[0] if video_titles else "Unknown Video"
-        )
+        processed_answer, video_dict = process_answer(initial_answer, urls, source_documents)
+        logging.debug(f"Processed answer: {processed_answer}")
 
-        # Prepare response
+        related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
+        logging.debug(f"Retrieved matched products: {related_products}")
+
         response_data = {
-            'response': result['answer'],
+            'response': display_answer,
+            'initial_answer': initial_answer,
             'related_products': related_products,
             'urls': urls,
             'contexts': contexts,
@@ -385,28 +493,24 @@ def chat():
             'video_titles': video_titles
         }
 
-        # Close database connection
-        cur.close()
-        conn.close()
+        logging.debug(f"Response data: {response_data}")
 
         return jsonify(response_data)
-
     except Exception as e:
         logging.error(f"Error in chat route: {str(e)}", exc_info=True)
         return jsonify({'error': 'An error occurred processing your request'}), 500
 
 @app.route('/api/user/<user_id>', methods=['GET'])
 def get_user_data(user_id):
-    """Get user conversation data."""
     try:
         user_data = {
             'conversationsBySection': {
-                "transcripts": [],
+                "bents": [],
                 "shop-improvement": [],
                 "tool-recommendations": []
             },
             'searchHistory': [],
-            'selectedIndex': "transcripts"
+            'selectedIndex': "bents"
         }
         return jsonify(user_data)
     except Exception as e:
@@ -415,106 +519,92 @@ def get_user_data(user_id):
 
 @app.route('/upload_document', methods=['POST'])
 def upload_document():
-    """Handle document upload and processing."""
     if 'file' not in request.files:
         return jsonify({'success': False, 'message': 'No file part'})
-    
     file = request.files['file']
     if file.filename == '':
         return jsonify({'success': False, 'message': 'No selected file'})
     
+    index_name = request.form.get('index_name')
+    if index_name not in TRANSCRIPT_INDEX_NAMES:
+        return jsonify({'success': False, 'message': 'Invalid index name'})
+    
     if file and file.filename.endswith('.docx'):
-        try:
-            # Save file temporarily
-            filename = secure_filename(file.filename)
-            file_path = os.path.join('/tmp', filename)
-            file.save(file_path)
-            
-            # Process file
-            transcript_text = extract_text_from_docx(file_path)
-            metadata = extract_metadata_from_text(transcript_text)
-            
-            # Generate embedding
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            chunks = text_splitter.split_text(transcript_text)
-            
-            # Connect to database
-            conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
-            cur = conn.cursor()
-            
-            # Insert chunks into database
-            for i, chunk in enumerate(chunks):
-                chunk_id = f"{metadata['title']}_chunk_{i}"
-                chunk_embedding = embeddings.embed_query(chunk)
-                
-                cur.execute("""
-                    INSERT INTO bents (id, chunk_id, text, title, url, vector)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
-                    str(uuid.uuid4()),
-                    chunk_id,
-                    chunk,
-                    metadata['title'],
-                    metadata.get('url', ''),
-                    chunk_embedding
-                ))
-            
-            conn.commit()
-            cur.close()
-            conn.close()
-            
-            # Clean up
-            os.remove(file_path)
-            
-            return jsonify({'success': True, 'message': 'File uploaded and processed successfully'})
-            
-        except Exception as e:
-            logging.error(f"Error processing document: {str(e)}")
-            return jsonify({'success': False, 'message': f'Error processing document: {str(e)}'})
+        filename = secure_filename(file.filename)
+        file_path = os.path.join('/tmp', filename)
+        file.save(file_path)
+        
+        transcript_text = extract_text_from_docx(file_path)
+        metadata = extract_metadata_from_text(transcript_text)
+        upsert_transcript(transcript_text, metadata, index_name)
+        
+        os.remove(file_path)
+        return jsonify({'success': True, 'message': 'File uploaded and processed successfully'})
     else:
         return jsonify({'success': False, 'message': 'Invalid file format'})
 
-@app.route('/documents', methods=['GET'])
+@app.route('/documents')
 def get_documents():
-    """Get all documents from database."""
     try:
         conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT DISTINCT title, url FROM bents")
+            cur.execute("SELECT * FROM products")
             documents = cur.fetchall()
         conn.close()
         return jsonify(documents)
     except Exception as e:
-        logging.error(f"Error fetching documents: {str(e)}")
+        print(f"Error in get_documents: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/')
-def index():
-    """Serve the main application page."""
+@app.route('/add_document', methods=['POST'])
+def add_document():
+    data = request.json
     try:
-        return render_template('index.html')
+        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "INSERT INTO products (title, tags, link) VALUES (%s, %s, %s) RETURNING id",
+                (data['title'], ','.join(data['tags']), data['link'])
+            )
+            product_id = cur.fetchone()['id']
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'product_id': product_id})
     except Exception as e:
-        logging.error(f"Template error: {str(e)}")
-        return "API is running successfully!", 200
+        print(f"Error in add_document: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
-def init_app():
-    """Initialize the application."""
-    # Verify database connection
-    if not verify_database():
-        logging.error("Failed to verify database connection")
-        raise Exception("Database verification failed")
-    
-    # Ensure required environment variables are set
-    required_env_vars = ['OPENAI_API_KEY', 'POSTGRES_URL']
-    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-    if missing_vars:
-        raise Exception(f"Missing required environment variables: {', '.join(missing_vars)}")
-    
-    logging.info("Application initialized successfully")
+@app.route('/delete_document', methods=['POST'])
+def delete_document():
+    data = request.json
+    try:
+        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM products WHERE id = %s", (data['id'],))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error in delete_document: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/update_document', methods=['POST'])
+def update_document():
+    data = request.json
+    try:
+        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE products SET title = %s, tags = %s, link = %s WHERE id = %s",
+                (data['title'], ','.join(data['tags']), data['link'], data['id'])
+            )
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error in update_document: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    try:
-        init_app()
-        app.run(debug=True, port=5000)
-    except Exception as e:
-        logging.error(f"Failed to start application: {str(e)}")
+    verify_database()
+    app.run(debug=True, port=5000)
