@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { ArrowRight, PlusCircle, HelpCircle, ChevronRight, BookOpen, X } from 'lucide-react';
+import { ArrowRight, PlusCircle, HelpCircle, ChevronRight, BookOpen, X, ExternalLinkIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import YouTube from 'react-youtube';
 import { Button } from "@/components/ui/button";
@@ -371,29 +371,65 @@ export default function Chat({ isVisible }) {
                   href={product.link}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-shrink-0 px-6 py-4 bg-white border border-gray-200 
-                           rounded-[8px] hover:border-blue-500 hover:shadow-sm 
-                           transition-all duration-200 w-[300px] cursor-pointer"
+                  className={cn(
+                    // Base styles - reduced width
+                    "flex-shrink-0 px-4 py-3 bg-white",
+                    "rounded-[8px] w-[250px]", // Reduced from 300px to 250px
+                    // Border and shadow
+                    "border border-gray-200",
+                    // Hover effects
+                    "transform transition-all duration-300 ease-in-out",
+                    "hover:scale-[1.02] hover:shadow-lg hover:border-blue-200",
+                    // Background gradient
+                    "bg-gradient-to-br from-white to-gray-50",
+                    "hover:from-blue-50/50 hover:to-white",
+                    // Group styling
+                    "group relative",
+                    // Cursor
+                    "cursor-pointer"
+                  )}
                 >
                   <div className="space-y-2">
+                    {/* Title and Price Row */}
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-900 line-clamp-1">
+                      <span className={cn(
+                        "text-sm font-medium text-gray-900 line-clamp-1",
+                        "group-hover:text-blue-700",
+                        "transition-colors duration-300"
+                      )}>
                         {product.title}
                       </span>
                       {product.price && (
-                        <span className="text-sm font-semibold text-blue-600">
+                        <span className={cn(
+                          "text-sm font-semibold text-blue-600",
+                          "group-hover:text-blue-700",
+                          "transition-colors duration-300"
+                        )}>
                           {product.price}
                         </span>
                       )}
                     </div>
+
+                    {/* Description */}
                     {product.description && (
-                      <p className="text-sm text-gray-600 line-clamp-2">
+                      <p className={cn(
+                        "text-sm text-gray-600 line-clamp-2",
+                        "group-hover:text-gray-700",
+                        "transition-colors duration-300"
+                      )}>
                         {product.description}
                       </p>
                     )}
+
+                    {/* Category Tag */}
                     {product.category && (
                       <div className="flex items-center">
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                        <span className={cn(
+                          "text-xs px-2 py-1 rounded-full",
+                          "bg-gray-100 text-gray-500",
+                          "group-hover:bg-blue-100 group-hover:text-blue-600",
+                          "transition-all duration-300"
+                        )}>
                           {product.category}
                         </span>
                       </div>
@@ -1073,52 +1109,19 @@ export default function Chat({ isVisible }) {
                 {showInitialQuestions && !isLoading && (
                   <div className="w-[calc(100%+0px)] sm:w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {randomQuestions.map((question, index) => (
-                      <div 
-                        key={index} 
-                        className={cn(
-                          // Base styles
-                          "flex-grow flex items-center bg-background",
-                          "border rounded-xl shadow-sm",
-                          "ring-offset-background",
-                          // Enhanced hover effects
-                          "hover:shadow-md hover:scale-[1.02] hover:border-blue-200",
-                          "transform transition-all duration-200 ease-in-out",
-                          // Gradient background effect on hover
-                          "bg-gradient-to-br from-white to-gray-50",
-                          "hover:from-blue-50 hover:to-white",
-                          // Ensure proper positioning
-                          "relative overflow-hidden group",
-                          // Add subtle glow effect
-                          "after:absolute after:inset-0 after:opacity-0 after:transition-opacity",
-                          "after:bg-gradient-to-br after:from-blue-100/20 after:to-transparent",
-                          "hover:after:opacity-100"
-                        )}
-                      >
+                      <div key={index} className={cn(
+                        "flex-grow flex items-center bg-background",
+                        "border rounded-xl shadow-sm hover:bg-gray-50",
+                        "ring-offset-background transition-colors duration-200",
+                        "focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                      )}>
                         <button
                           onClick={(e) => handleSearch(e, index)}
-                          className={cn(
-                            "w-full p-4 text-left",
-                            "relative z-10", // Ensure button stays above hover effects
-                            "transition-colors duration-200",
-                            "focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
-                            "disabled:opacity-50"
-                          )}
+                          className="w-full p-4 text-left"
                           disabled={isSearching || isLoading}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className={cn(
-                              "text-sm text-gray-900",
-                              "group-hover:text-blue-700", // Text color change on hover
-                              "transition-colors duration-200"
-                            )}>
-                              {question}
-                            </span>
-                            <ChevronRight className={cn(
-                              "h-4 w-4 text-gray-400",
-                              "group-hover:text-blue-500", // Icon color change on hover
-                              "transform transition-transform duration-200",
-                              "group-hover:translate-x-1" // Slide effect on hover
-                            )} />
+                          <div className="flex items-center">
+                            <span className="text-sm text-gray-900">{question}</span>
                           </div>
                         </button>
                       </div>
@@ -1492,66 +1495,3 @@ const getStartTime = (timestamp) => {
   const [minutes, seconds] = timestamp.split(':').map(Number);
   return minutes * 60 + seconds;
 };
-
-// Add these custom styles to your CSS
-const customStyles = `
-  /* Add smooth transition for transform properties */
-  .transform {
-    transition-property: transform, box-shadow, border-color, background-color;
-  }
-
-  /* Optional: Add custom animation for the glow effect */
-  @keyframes glow {
-    0% {
-      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.1);
-    }
-    50% {
-      box-shadow: 0 0 20px 10px rgba(59, 130, 246, 0.2);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.1);
-    }
-  }
-
-  /* Optional: Add custom animation for the shine effect */
-  @keyframes shine {
-    from {
-      transform: translateX(-100%) rotate(45deg);
-    }
-    to {
-      transform: translateX(200%) rotate(45deg);
-    }
-  }
-
-  /* Add shine effect element */
-  .group:hover::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 50px;
-    height: 100%;
-    background: linear-gradient(
-      to right,
-      transparent 0%,
-      rgba(255, 255, 255, 0.4) 50%,
-      transparent 100%
-    );
-    animation: shine 1s ease-in-out;
-    z-index: 1;
-  }
-
-  /* Improve touch device handling */
-  @media (hover: hover) and (pointer: fine) {
-    .group:hover {
-      transform: scale(1.02);
-    }
-  }
-
-  /* Ensure proper handling on touch devices */
-  @media (hover: none) {
-    .group:active {
-      transform: scale(0.98);
-    }
-  }
-`;
