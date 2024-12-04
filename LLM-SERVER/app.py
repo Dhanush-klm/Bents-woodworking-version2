@@ -7,12 +7,10 @@ from werkzeug.utils import secure_filename
 from docx import Document
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_pinecone import PineconeVectorStore
 from langchain.chains import ConversationalRetrievalChain
-from langchain.schema import Document as LangchainDocument
+from langchain.schema import Document as LangchainDocument, BaseRetriever
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
-from pinecone import Pinecone, ServerlessSpec
 import langsmith
 from flask_cors import CORS
 import psycopg2
@@ -21,6 +19,9 @@ import base64
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 import time
 import json
+import numpy as np
+from typing import List
+from pydantic import BaseModel, Field
 
 
 class LLMResponseError(Exception):
@@ -35,40 +36,7 @@ class LLMNoResponseError(LLMResponseError):
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002","https://bents-frontend-server.vercel.app","https://bents-backend-server.vercel.app"]}})
-
-app.secret_key = os.urandom(24)  # Set a secret key for sessions
-
-# Access your API keys (set these in environment variables)
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-TRANSCRIPT_INDEX_NAMES = ["bents", "shop-improvement", "tool-recommendations"]
-PRODUCT_INDEX_NAME = "bents-woodworking-products"
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
-os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
-os.environ["LANGCHAIN_PROJECT"] = "jason-json"
-
-# Initialize Langchain components
-embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4o-mini", temperature=0)
-
-# Initialize Pinecone
-pc = Pinecone(api_key=PINECONE_API_KEY)
-
-# Create or connect to the Pinecone indexes
-for INDEX_NAME in TRANSCRIPT_INDEX_NAMES + [PRODUCT_INDEX_NAME]:
-    if INDEX_NAME not in pc.list_indexes().names():
-        pc.create_index(
-            name=INDEX_NAME,
-            dimension=1536,  # OpenAI embeddings dimension
-            metric='cosine',
-            spec=ServerlessSpec(cloud='aws', region='us-east-1')
-        )
-
-# Create VectorStores
-transcript_vector_stores = {name: PineconeVectorStore(index=pc.Index(name), embedding=embeddings, text_key="text") for name in TRANSCRIPT_INDEX_NAMES}
-product_vector_store = PineconeVectorStore(index=pc.Index(PRODUCT_INDEX_NAME), embedding=embeddings, text_key="tags")
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002"]}})
 
 # System instructions
 SYSTEM_INSTRUCTIONS = """You are an AI assistant specialized in information retrieval from text documents.
@@ -87,10 +55,23 @@ SYSTEM_INSTRUCTIONS = """You are an AI assistant specialized in information retr
         11. Do not include timestamps in your response text. Focus on providing clear, direct answers.
         12. Do not include any URLs in your response. Just provide the timestamps in the specified format.
         13. When referencing timestamps that may be inaccurate, you can use language like "around", "approximately", or "in the vicinity of" to indicate that the exact moment may vary slightly.
+        14. Only use the provided context to generate answers. Do not generate generic answers or use external knowledge.
         Remember, always respond in English, even if the query or context is in another language.
-        Always represent the speaker as Jason bent.You are an assistant expert representing Jason Bent as jason bent on woodworking response. Answer questions based on the provided context. The context includes timestamps in the format [Timestamp: HH:MM:SS]. When referencing information, include these timestamps in the format {{timestamp:HH:MM:SS}}.
+        Always represent the speaker as Jason bent. You are an assistant expert representing Jason Bent as jason bent on woodworking response. Answer questions based on the provided context. The context includes timestamps in the format [Timestamp: HH:MM:SS]. When referencing information, include these timestamps in the format {{timestamp:HH:MM:SS}}.
 Then show that is in generated response with the provided context.
 """
+app.secret_key = os.urandom(24)  # Set a secret key for sessions
+
+# Access your API keys (set these in environment variables)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
+os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+os.environ["LANGCHAIN_PROJECT"] = "jason-json"
+
+# Initialize Langchain components
+embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4o-mini", temperature=0)
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -101,7 +82,7 @@ def rewrite_query(query, chat_history=None):
     try:
         # Create prompt that's compatible with the existing LLM setup
         rewrite_prompt = f"""As bent's woodworks assistant, rewrite this query to be more specific 
-        and searchable for woodworking content. Add relevant terminology and context while maintaining 
+        and searchable for woodworking content. while maintaining 
         the original intent. Only return the rewritten query without any explanations.
 
         Original query: {query}
@@ -116,7 +97,7 @@ def rewrite_query(query, chat_history=None):
         # Clean up the response
         cleaned_response = response.replace("Rewritten query:", "").strip()
         
-        # Add logging consistent with existing code style
+        # Add logging for debugging
         logging.debug(f"Original query: {query}")
         logging.debug(f"Rewritten query: {cleaned_response}")
         
@@ -208,7 +189,7 @@ def process_answer(answer, urls, source_documents):
             logging.error(f"Error generating description: {str(e)}")
             return ' '.join(context.split()[:6])
 
-    def replace_timestamp(match, source_index, source_documents):
+    def process_timestamp(match, source_index, source_documents):
         timestamp = match.group(1)
         timestamp_pos = match.start()
         context = extract_context(answer, timestamp_pos)
@@ -229,25 +210,39 @@ def process_answer(answer, urls, source_documents):
         }
     
     timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
-    timestamps_with_context = [
-        replace_timestamp(match, i, source_documents) 
+    timestamps_info = [
+        process_timestamp(match, i, source_documents) 
         for i, match in enumerate(timestamp_matches)
     ]
     
     video_dict = {
-        f'[video{i}]': {
+        str(i): {
             'urls': entry['links'],
             'timestamp': entry['timestamp'],
             'description': entry['description'],
             'video_title': entry['video_title']
         }
-        for i, entry in enumerate(timestamps_with_context)
+        for i, entry in enumerate(timestamps_info)
     }
     
-    processed_answer = answer
-    for i, match in enumerate(timestamp_matches):
-        placeholder = f'[video{i}]'
-        processed_answer = processed_answer.replace(match.group(0), placeholder)
+    # Remove all timestamp references and any "Video X" references
+    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
+    processed_answer = re.sub(r'\[?video\s*\d+\]?', '', processed_answer, flags=re.IGNORECASE)
+    
+    # Clean up formatting
+    processed_answer = re.sub(r'"\s*$', '"', processed_answer)  # Clean up trailing spaces before quotes
+    processed_answer = re.sub(r'\s+', ' ', processed_answer)  # Clean up multiple spaces
+    processed_answer = re.sub(r'\s*\n\s*', '\n', processed_answer)  # Clean up newlines
+    processed_answer = re.sub(r'\n{3,}', '\n\n', processed_answer)  # Reduce multiple newlines
+    
+    # Format numbered lists properly
+    processed_answer = re.sub(r'(\d+)\.\s*', r'\n\1. ', processed_answer)
+    
+    # Ensure proper spacing after periods
+    processed_answer = re.sub(r'\.(?=\S)', '. ', processed_answer)
+    
+    # Clean up any remaining whitespace issues
+    processed_answer = processed_answer.strip()
     
     return processed_answer, video_dict
 
@@ -280,15 +275,33 @@ def upsert_transcript(transcript_text, metadata, index_name):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     chunks = text_splitter.split_text(transcript_text)
     
-    documents = []
-    for i, chunk in enumerate(chunks):
-        chunk_metadata = metadata.copy()
-        chunk_metadata['chunk_id'] = f"{metadata['title']}_chunk_{i}"
-        chunk_metadata['url'] = metadata.get('url', '')
-        chunk_metadata['title'] = metadata.get('title', 'Unknown Video')
-        documents.append(LangchainDocument(page_content=chunk, metadata=chunk_metadata))
-    
-    transcript_vector_stores[index_name].add_documents(documents)
+    try:
+        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
+        with conn.cursor() as cur:
+            for i, chunk in enumerate(chunks):
+                chunk_metadata = metadata.copy()
+                chunk_metadata['chunk_id'] = f"{metadata['title']}_chunk_{i}"
+                chunk_metadata['url'] = metadata.get('url', '')
+                chunk_metadata['title'] = metadata.get('title', 'Unknown Video')
+                
+                # Generate embeddings for the chunk
+                chunk_embedding = embeddings.embed_query(chunk)
+                
+                # Insert into bents table
+                cur.execute("""
+                    INSERT INTO bents (text, title, url, chunk_id, vector)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (chunk_id) DO UPDATE
+                    SET text = EXCLUDED.text, vector = EXCLUDED.vector
+                """, (chunk, chunk_metadata['title'], chunk_metadata['url'], 
+                      chunk_metadata['chunk_id'], str(chunk_embedding)))
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error upserting transcript: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(2), retry=retry_if_exception_type(LLMResponseError))
 def retry_llm_call(qa_chain, query, chat_history):
@@ -308,7 +321,104 @@ def retry_llm_call(qa_chain, query, chat_history):
         logging.error(f"Unexpected error in LLM call: {str(e)}")
         raise LLMNoResponseError("LLM failed due to an unexpected error")
 
+def connect_to_db():
+    return psycopg2.connect(os.getenv("POSTGRES_URL"))
 
+def get_embeddings(query):
+    try:
+        return embeddings.embed_query(query)
+    except Exception as e:
+        logging.error(f"Error generating embeddings: {str(e)}")
+        raise
+
+def cosine_similarity(v1, v2):
+    return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+
+def search_neon_db(query_embedding, table_name, top_k=5):
+    conn = None
+    try:
+        conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Query with table name as parameter
+            query = f"""
+                SELECT id, vector, text, title, url, chunk_id 
+                FROM {table_name}
+                WHERE vector IS NOT NULL
+            """
+            cur.execute(query)
+            rows = cur.fetchall()
+            
+            similarities = []
+            for row in rows:
+                try:
+                    vector_str = row['vector']
+                    vector_values = vector_str.strip('[]').split(',')
+                    vector = np.array([float(x.strip()) for x in vector_values])
+                    
+                    if len(vector) == len(query_embedding):
+                        similarity = cosine_similarity(query_embedding, vector)
+                        similarities.append((similarity, row))
+                except Exception as e:
+                    logging.error(f"Error processing vector for row {row['id']}: {str(e)}")
+                    continue
+            
+            similarities.sort(reverse=True, key=lambda x: x[0])
+            return [
+                {
+                    'id': row['id'],
+                    'text': row['text'],
+                    'title': row['title'],
+                    'url': row['url'],
+                    'chunk_id': row['chunk_id'],
+                    'similarity_score': float(sim)
+                }
+                for sim, row in similarities[:top_k]
+            ]
+
+    except Exception as e:
+        logging.error(f"Error in search_neon_db: {str(e)}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+def handle_query(query):
+    query_embedding = get_embeddings(query)
+    results = search_neon_db(query_embedding)
+    return results
+
+# Update the custom retriever class
+class CustomNeonRetriever(BaseRetriever, BaseModel):
+    table_name: str = Field(...)  # The ... means this field is required
+    
+    class Config:
+        arbitrary_types_allowed = True  # This allows for non-pydantic types
+    
+    def get_relevant_documents(self, query: str) -> List[LangchainDocument]:
+        query_embedding = get_embeddings(query)
+        results = search_neon_db(query_embedding, self.table_name)
+        
+        documents = []
+        for result in results:
+            timestamp_match = re.search(r'\[Timestamp: ([^\]]+)\]', result['text'])
+            timestamp = timestamp_match.group(1) if timestamp_match else None
+            
+            doc = LangchainDocument(
+                page_content=result['text'],
+                metadata={
+                    'title': result['title'],
+                    'url': result['url'],
+                    'timestamp': timestamp,
+                    'chunk_id': result['chunk_id'],
+                    'source': self.table_name
+                }
+            )
+            documents.append(doc)
+        
+        return documents
+
+    async def aget_relevant_documents(self, query: str) -> List[LangchainDocument]:
+        return self.get_relevant_documents(query)
 
 @app.route('/')
 @app.route('/database')
@@ -319,32 +429,18 @@ def serve_spa():
 def chat():
     try:
         data = request.json
-        logging.debug(f"Received data: {data}")
-
         user_query = data['message'].strip()
-        selected_index = data['selected_index']
+        selected_index = data['selected_index']  # This will now be your table name
         chat_history = data.get('chat_history', [])
 
-        logging.debug(f"Chat history received: {chat_history}")
-
-        # Initial input validation
-        if not user_query or user_query in ['.', ',', '?', '!']:
-            return jsonify({
-                'response': "I'm sorry, but I didn't receive a valid question. Could you please ask a complete question?",
-                'related_products': [],
-                'urls': [],
-                'contexts': [],
-                'video_links': {}
-            })
-
-        # Format chat history for ConversationalRetrievalChain
+        # Format chat history
         formatted_history = []
         for i in range(0, len(chat_history) - 1, 2):
             human = chat_history[i]
             ai = chat_history[i + 1] if i + 1 < len(chat_history) else ""
             formatted_history.append((human, ai))
 
-        # First, check relevance before query rewriting
+        # Add relevancy check
         relevance_check_prompt = f"""
         Given the following question or message and the chat history, determine if it is:
         1. A greeting or send-off like "thankyou" or "goodbye" or messages or casual messages like 'hey' or 'hello' or general conversation starter
@@ -370,76 +466,47 @@ def chat():
         
         relevance_response = llm.predict(relevance_check_prompt)
         
-        # Handle non-relevant cases first
+        # Handle non-relevant cases
         if "GREETING" in relevance_response.upper():
-            try:
-                greeting_prompt = f"Generate a friendly greeting response for a woodworking assistant in response to: '{user_query}'"
-                greeting_response = llm.predict(greeting_prompt)
-                return jsonify({
-                    'response': greeting_response,
-                    'related_products': [],
-                    'urls': [],
-                    'contexts': [],
-                    'video_links': {}
-                })
-            except Exception as e:
-                logging.error(f"Error generating greeting: {str(e)}")
-                return jsonify({
-                    'response': f"Hello! I'm Jason Bent's woodworking assistant. How can I help you today?",
-                    'related_products': [],
-                    'urls': [],
-                    'contexts': [],
-                    'video_links': {}
-                })
+            greeting_response = "Hello! I'm Jason Bent's woodworking assistant. How can I help you today?"
+            return jsonify({
+                'response': greeting_response,
+                'related_products': [],
+                'urls': [],
+                'contexts': [],
+                'video_links': {}
+            })
         elif "INAPPROPRIATE" in relevance_response.upper():
-            inappropriate_prompt = f"Generate a polite response declining to answer the inappropriate query: '{user_query}' and redirect to woodworking topics"
-            try:
-                decline_response = llm.predict(inappropriate_prompt)
-                return jsonify({
-                    'response': decline_response,
-                    'related_products': [],
-                    'urls': [],
-                    'contexts': [],
-                    'video_links': {}
-                })
-            except Exception as e:
-                return jsonify({
-                    'response': "I'm sorry, but this is outside my context of answering. Is there something else I can help you with regarding woodworking, tools, or home improvement?",
-                    'related_products': [],
-                    'urls': [],
-                    'contexts': [],
-                    'video_links': {}
-                })
+            return jsonify({
+                'response': "I'm sorry, but I can only assist with woodworking-related questions. Is there something else I can help you with?",
+                'related_products': [],
+                'urls': [],
+                'contexts': [],
+                'video_links': {}
+            })
         elif "NOT RELEVANT" in relevance_response.upper():
-            irrelevant_prompt = f"Generate a polite response explaining why the query: '{user_query}' is not relevant to woodworking and redirect to appropriate topics"
-            try:
-                redirect_response = llm.predict(irrelevant_prompt)
-                return jsonify({
-                    'response': redirect_response,
-                    'related_products': [],
-                    'urls': [],
-                    'contexts': [],
-                    'video_links': {}
-                })
-            except Exception as e:
-                return jsonify({
-                    'response': "I'm sorry, but I'm specialized in topics related to our company, woodworking, tools, and home improvement. Could you please ask a question related to these topics?",
-                    'related_products': [],
-                    'urls': [],
-                    'contexts': [],
-                    'video_links': {}
-                })
+            return jsonify({
+                'response': "I'm specialized in woodworking topics. Could you please ask a question related to woodworking, tools, or home improvement?",
+                'related_products': [],
+                'urls': [],
+                'contexts': [],
+                'video_links': {}
+            })
 
         # Only proceed with query rewriting if the query is relevant
         rewritten_query = rewrite_query(user_query, formatted_history)
         logging.debug(f"Query rewritten from '{user_query}' to '{rewritten_query}'")
 
-        # Continue with existing retrieval and response generation logic
-        retriever = transcript_vector_stores[selected_index].as_retriever(search_kwargs={"k": 5})
+        # Continue with your existing retrieval and response generation logic...
+        retriever = CustomNeonRetriever(table_name=selected_index)
         
+        # Define prompt
         prompt = ChatPromptTemplate.from_messages([
             SystemMessagePromptTemplate.from_template(SYSTEM_INSTRUCTIONS),
-            HumanMessagePromptTemplate.from_template("Context: {context}\n\nChat History: {chat_history}\n\nQuestion: {question}")
+            HumanMessagePromptTemplate.from_template(
+                "Context: {context}\n\nChat History: {chat_history}\n\nQuestion: {question}\n\n"
+                "Instruction: Only use the provided context to generate the answer."
+            )
         ])
         
         qa_chain = ConversationalRetrievalChain.from_llm(
@@ -449,53 +516,33 @@ def chat():
             return_source_documents=True
         )
         
-        try:
-            result = retry_llm_call(qa_chain, rewritten_query, formatted_history)
-        except LLMResponseError as e:
-            error_message = "Failed to get a complete response from the AI after multiple attempts."
-            if isinstance(e, LLMNoResponseError):
-                error_message = "The AI failed to generate a response after multiple attempts."
-            return jsonify({'error': error_message}), 500
-        except Exception as e:
-            logging.error(f"Unexpected error in LLM call: {str(e)}")
-            return jsonify({'error': 'An unexpected error occurred while processing your request.'}), 500
-
-        initial_answer = result['answer']
-        display_answer = re.sub(r'\{timestamp:[^\}]+\}', '', initial_answer)
+        # Use the rewritten query instead of the original
+        result = qa_chain({"question": rewritten_query, "chat_history": formatted_history})
         
-        contexts = [doc.page_content for doc in result['source_documents']]
+        # Extract answer and source documents
+        answer = result['answer']
         source_documents = result['source_documents']
-
-        # Extract video titles and URLs from all source documents
-        video_titles = []
+        
+        # Process source documents
         urls = []
+        contexts = []
         for doc in source_documents:
-            metadata = doc.metadata
-            video_titles.append(metadata.get('title', "Unknown Video"))
-            urls.append(metadata.get('url', None))
-
-        logging.debug(f"Extracted video titles: {video_titles}")
-        logging.debug(f"Extracted URLs: {urls}")
-
-        processed_answer, video_dict = process_answer(initial_answer, urls, source_documents)
-        logging.debug(f"Processed answer: {processed_answer}")
-
-        related_products = get_matched_products(video_titles[0] if video_titles else "Unknown Video")
-        logging.debug(f"Retrieved matched products: {related_products}")
-
+            if 'url' in doc.metadata:
+                urls.append(doc.metadata['url'])
+            contexts.append(doc.page_content)
+        
+        # Process the answer to get video dictionary
+        processed_answer, video_dict = process_answer(answer, urls, source_documents)
+        
         response_data = {
-            'response': display_answer,
-            'initial_answer': initial_answer,
-            'related_products': related_products,
-            'urls': urls,
-            'contexts': contexts,
+            'response': processed_answer,
             'video_links': video_dict,
-            'video_titles': video_titles
+            'related_products': get_matched_products(source_documents[0].metadata.get('title', '') if source_documents else ""),
+            'urls': urls
         }
-
-        logging.debug(f"Response data: {response_data}")
-
+        
         return jsonify(response_data)
+        
     except Exception as e:
         logging.error(f"Error in chat route: {str(e)}", exc_info=True)
         return jsonify({'error': 'An error occurred processing your request'}), 500
@@ -506,8 +553,8 @@ def get_user_data(user_id):
         user_data = {
             'conversationsBySection': {
                 "bents": [],
-                "shop-improvement": [],
-                "tool-recommendations": []
+                "shop_improvement": [],
+                "tool_recommendations": []
             },
             'searchHistory': [],
             'selectedIndex': "bents"
@@ -516,32 +563,6 @@ def get_user_data(user_id):
     except Exception as e:
         logging.error(f"Error fetching user data: {str(e)}", exc_info=True)
         return jsonify({'error': 'An error occurred fetching user data'}), 500
-
-@app.route('/upload_document', methods=['POST'])
-def upload_document():
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'message': 'No file part'})
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'message': 'No selected file'})
-    
-    index_name = request.form.get('index_name')
-    if index_name not in TRANSCRIPT_INDEX_NAMES:
-        return jsonify({'success': False, 'message': 'Invalid index name'})
-    
-    if file and file.filename.endswith('.docx'):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join('/tmp', filename)
-        file.save(file_path)
-        
-        transcript_text = extract_text_from_docx(file_path)
-        metadata = extract_metadata_from_text(transcript_text)
-        upsert_transcript(transcript_text, metadata, index_name)
-        
-        os.remove(file_path)
-        return jsonify({'success': True, 'message': 'File uploaded and processed successfully'})
-    else:
-        return jsonify({'success': False, 'message': 'Invalid file format'})
 
 @app.route('/documents')
 def get_documents():
@@ -604,6 +625,88 @@ def update_document():
     except Exception as e:
         print(f"Error in update_document: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/search', methods=['POST'])
+def search():
+    try:
+        data = request.json
+        query = data.get('query', '').strip()
+
+        if not query:
+            return jsonify({'error': 'Query is required'}), 400
+
+        # Generate embeddings for the query
+        query_embedding = get_embeddings(query)
+        
+        # Get raw results from database
+        results = search_neon_db(query_embedding)
+        
+        # Return only the database results
+        return jsonify({
+            'results': results,
+            'count': len(results)
+        }), 200
+
+    except Exception as e:
+        logging.error(f"Error in search route: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/upload_document', methods=['POST'])
+def upload_document():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': 'No file part'})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'message': 'No selected file'})
+    
+    table_name = request.form.get('table_name')
+    if table_name not in ["bents", "shop_improvement", "tool_recommendations"]:  # Define your valid table names
+        return jsonify({'success': False, 'message': 'Invalid table name'})
+    
+    if file and file.filename.endswith('.docx'):
+        try:
+            filename = secure_filename(file.filename)
+            file_path = os.path.join('/tmp', filename)
+            file.save(file_path)
+            
+            transcript_text = extract_text_from_docx(file_path)
+            metadata = extract_metadata_from_text(transcript_text)
+            
+            # Generate embeddings for the text
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            chunks = text_splitter.split_text(transcript_text)
+            
+            conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
+            with conn.cursor() as cur:
+                for i, chunk in enumerate(chunks):
+                    chunk_embedding = embeddings.embed_query(chunk)
+                    chunk_id = f"{metadata['title']}_chunk_{i}"
+                    
+                    cur.execute(f"""
+                        INSERT INTO {table_name} (text, title, url, chunk_id, vector)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (chunk_id) DO UPDATE
+                        SET text = EXCLUDED.text, vector = EXCLUDED.vector
+                    """, (
+                        chunk,
+                        metadata.get('title', 'Unknown Video'),
+                        metadata.get('url', ''),
+                        chunk_id,
+                        str(chunk_embedding)
+                    ))
+            
+            conn.commit()
+            conn.close()
+            os.remove(file_path)
+            
+            return jsonify({'success': True, 'message': 'File uploaded and processed successfully'})
+            
+        except Exception as e:
+            logging.error(f"Error processing document: {str(e)}")
+            return jsonify({'success': False, 'message': f'Error processing document: {str(e)}'})
+    else:
+        return jsonify({'success': False, 'message': 'Invalid file format'})
 
 if __name__ == '__main__':
     verify_database()
