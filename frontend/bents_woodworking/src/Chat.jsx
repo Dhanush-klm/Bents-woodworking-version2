@@ -671,62 +671,12 @@ export default function Chat({ isVisible }) {
           onClick={handleNewConversation}
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-l-xl mt-2 flex-shrink-0"
+          className="h-[42px] w-[42px] rounded-l-lg flex items-center justify-center flex-shrink-0"
         >
-          <PlusCircle className="h-4 w-4" />
+          <PlusCircle className="h-5 w-5" />
         </Button>
 
-        <div className="relative mt-2 flex-shrink-0" ref={dropdownRef}>
-          <Button
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "h-8 w-8",
-              selectedIndex !== "bents" 
-                ? "text-blue-500 hover:text-blue-700" 
-                : "text-muted-foreground hover:text-foreground"
-            )}
-            title={selectedIndex === "bents" ? "All Categories" : "Category Selected"}
-          >
-            <HelpCircle className="h-4 w-4" />
-          </Button>
-          {isDropdownOpen && (
-            <div className="absolute bottom-full left-0 mb-2 w-48 rounded-xl shadow-lg bg-white border z-50">
-              <div className="py-1 bg-white">
-                {[
-                  { value: "bents", label: "All" },
-                  { value: "shop-improvement", label: "Shop Improvement" },
-                  { value: "tool-recommendations", label: "Tool Recommendations" }
-                ].map((option) => (
-                  <Button
-                    key={option.value}
-                    onClick={() => {
-                      setSelectedIndex(option.value);
-                      setIsDropdownOpen(false);
-                    }}
-                    variant="ghost"
-                    className={cn(
-                      "w-full justify-start px-4 py-2 text-sm h-auto bg-white",
-                      selectedIndex === option.value
-                        ? "bg-primary text-primary-foreground"
-                        : "text-foreground hover:bg-accent"
-                    )}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <span>{option.label}</span>
-                      {selectedIndex === option.value && (
-                        <ChevronRight className="h-4 w-4 ml-2" />
-                      )}
-                    </div>
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="h-5 w-px bg-border mx-1 mt-2 flex-shrink-0" />
+        <div className="h-[42px] w-px bg-border mx-1 flex-shrink-0" />
         
         <form onSubmit={handleSearch} className="flex-grow flex items-start min-w-0">
           <Textarea
@@ -776,13 +726,13 @@ export default function Chat({ isVisible }) {
             type="submit"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-r-xl mt-2 flex-shrink-0"
+            className="h-[42px] w-[42px] rounded-r-lg flex items-center justify-center flex-shrink-0"
             disabled={isLoading}
           >
             {isLoading ? (
               <span className="animate-spin">⌛</span>
             ) : (
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-5 w-5" />
             )}
           </Button>
         </form>
