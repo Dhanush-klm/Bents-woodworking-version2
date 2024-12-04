@@ -78,8 +78,8 @@ export default function Chat({ isVisible }) {
   const [currentSourceVideos, setCurrentSourceVideos] = useState([]); // Add this line
   const [conversationHistory, setConversationHistory] = useState({
     "bents": [],
-    "shop-improvement": [],
-    "tool-recommendations": []
+    "shop_improvement": [],
+    "tool_recommendations": []
   });
   const [showInitialQuestions, setShowInitialQuestions] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -696,8 +696,8 @@ export default function Chat({ isVisible }) {
               <div className="py-1 bg-white">
                 {[
                   { value: "bents", label: "All" },
-                  { value: "shop-improvement", label: "Shop Improvement" },
-                  { value: "tool-recommendations", label: "Tool Recommendations" }
+                  { value: "shop_improvement", label: "Shop Improvement" },
+                  { value: "tool_recommendations", label: "Tool Recommendations" }
                 ].map((option) => (
                   <Button
                     key={option.value}
@@ -1443,13 +1443,13 @@ const handleSectionChange = (value) => {
   
   // Update the search context based on selection
   switch(value) {
-    case "shop-improvement":
+    case "shop_improvement":
       // Set context for shop improvement
-      setCurrentTags(['shop-improvement']);
+      setCurrentTags(['shop_improvement']);
       break;
-    case "tool-recommendations":
+    case "tool_recommendations":
       // Set context for tool recommendations
-      setCurrentTags(['tool-recommendations']);
+      setCurrentTags(['tool_recommendations']);
       break;
     default:
       // Reset to all categories
