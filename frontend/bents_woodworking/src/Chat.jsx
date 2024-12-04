@@ -78,8 +78,8 @@ export default function Chat({ isVisible }) {
   const [currentSourceVideos, setCurrentSourceVideos] = useState([]); // Add this line
   const [conversationHistory, setConversationHistory] = useState({
     "bents": [],
-    "shop_improvement": [],
-    "tool_recommendations": []
+    "shop-improvement": [],
+    "tool-recommendations": []
   });
   const [showInitialQuestions, setShowInitialQuestions] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -696,8 +696,8 @@ export default function Chat({ isVisible }) {
               <div className="py-1 bg-white">
                 {[
                   { value: "bents", label: "All" },
-                  { value: "shop_improvement", label: "Shop Improvement" },
-                  { value: "tool_recommendations", label: "Tool Recommendations" }
+                  { value: "shop-improvement", label: "Shop Improvement" },
+                  { value: "tool-recommendations", label: "Tool Recommendations" }
                 ].map((option) => (
                   <Button
                     key={option.value}
@@ -1031,19 +1031,16 @@ export default function Chat({ isVisible }) {
 
     const handleMouseDown = (e) => {
       isDown = true;
-      slider.style.cursor = 'grabbing';
       startX = e.pageX - slider.offsetLeft;
       scrollLeft = slider.scrollLeft;
     };
 
     const handleMouseLeave = () => {
       isDown = false;
-      slider.style.cursor = 'grab';
     };
 
     const handleMouseUp = () => {
       isDown = false;
-      slider.style.cursor = 'grab';
     };
 
     const handleMouseMove = (e) => {
@@ -1429,6 +1426,48 @@ const styles = `
   .custom-scrollbar:active {
     cursor: grabbing;
   }
+
+  /* Remove or update these cursor styles */
+  .custom-scrollbar {
+    /* Remove the grab cursor */
+    cursor: default !important; /* Forces default arrow cursor */
+    user-select: none;
+  }
+
+  .custom-scrollbar:active {
+    /* Remove the grabbing cursor */
+    cursor: default !important;
+  }
+
+  /* Add specific cursor styles only for clickable elements */
+  button, 
+  a, 
+  .clickable {
+    cursor: pointer;
+  }
+
+  /* Force default cursor for all other elements */
+  * {
+    cursor: default;
+  }
+
+  /* Adjust header and footer styles */
+  .header {
+    height: 50px; /* Reduce height */
+    padding: 10px 20px; /* Adjust padding */
+  }
+
+  .footer {
+    height: 50px; /* Reduce height */
+    padding: 10px 20px; /* Adjust padding */
+  }
+
+  /* Ensure content area uses available space */
+  .content {
+    padding-top: 60px; /* Adjust to match header height */
+    padding-bottom: 60px; /* Adjust to match footer height */
+    overflow-y: auto; /* Allow scrolling if needed */
+  }
 `;
 
 // Add the styles to the document
@@ -1443,13 +1482,13 @@ const handleSectionChange = (value) => {
   
   // Update the search context based on selection
   switch(value) {
-    case "shop_improvement":
+    case "shop-improvement":
       // Set context for shop improvement
-      setCurrentTags(['shop_improvement']);
+      setCurrentTags(['shop-improvement']);
       break;
-    case "tool_recommendations":
+    case "tool-recommendations":
       // Set context for tool recommendations
-      setCurrentTags(['tool_recommendations']);
+      setCurrentTags(['tool-recommendations']);
       break;
     default:
       // Reset to all categories
