@@ -427,7 +427,6 @@ def chat():
     try:
         data = request.json
         user_query = data['message'].strip()
-        selected_index = data['selected_index']  # This will now be your table name
         chat_history = data.get('chat_history', [])
 
         # Format chat history
@@ -495,7 +494,7 @@ def chat():
         logging.debug(f"Query rewritten from '{user_query}' to '{rewritten_query}'")
 
         # Continue with your existing retrieval and response generation logic...
-        retriever = CustomNeonRetriever(table_name=selected_index)
+        retriever = CustomNeonRetriever(table_name="bents")
         
         # Define prompt
         prompt = ChatPromptTemplate.from_messages([
@@ -549,9 +548,7 @@ def get_user_data(user_id):
     try:
         user_data = {
             'conversationsBySection': {
-                "bents": [],
-                "shop_improvement": [],
-                "tool_recommendations": []
+                "bents": []
             },
             'searchHistory': [],
             'selectedIndex': "bents"
@@ -657,9 +654,7 @@ def upload_document():
     if file.filename == '':
         return jsonify({'success': False, 'message': 'No selected file'})
     
-    table_name = request.form.get('table_name')
-    if table_name not in ["bents", "shop_improvement", "tool_recommendations"]:  # Define your valid table names
-        return jsonify({'success': False, 'message': 'Invalid table name'})
+    table_name = "bents"
     
     if file and file.filename.endswith('.docx'):
         try:
