@@ -480,9 +480,16 @@ def chat():
         
         relevance_response = llm.predict(relevance_check_prompt)
         
-        # Handle non-relevant cases
+        # Handle non-relevant cases using LLM
         if "GREETING" in relevance_response.upper():
-            greeting_response = "Hello! I'm Jason Bent's woodworking assistant. How can I help you today?"
+            greeting_prompt = f"""
+            The following message is a greeting or casual message. Please provide a friendly and engaging response.
+
+            Message: {user_query}
+
+            Response:
+            """
+            greeting_response = llm.predict(greeting_prompt)
             return jsonify({
                 'response': greeting_response,
                 'related_products': [],
@@ -491,16 +498,32 @@ def chat():
                 'video_links': {}
             })
         elif "INAPPROPRIATE" in relevance_response.upper():
+            inappropriate_prompt = f"""
+            The following message is inappropriate or related to harmful activities. Please provide a polite and firm response indicating the limitations of the assistant.
+
+            Message: {user_query}
+
+            Response:
+            """
+            inappropriate_response = llm.predict(inappropriate_prompt)
             return jsonify({
-                'response': "I'm sorry, but I can only assist with woodworking-related questions. Is there something else I can help you with?",
+                'response': inappropriate_response,
                 'related_products': [],
                 'urls': [],
                 'contexts': [],
                 'video_links': {}
             })
         elif "NOT RELEVANT" in relevance_response.upper():
+            not_relevant_prompt = f"""
+            The following question is not directly related to woodworking or the assistant's expertise. However, please provide a message to the user for could you please rephrase your question.
+
+            Question: {user_query}
+
+            Response:
+            """
+            not_relevant_response = llm.predict(not_relevant_prompt)
             return jsonify({
-                'response': "I'm specialized in woodworking topics. Could you please ask a question related to woodworking, tools, or home improvement?",
+                'response': not_relevant_response,
                 'related_products': [],
                 'urls': [],
                 'contexts': [],
