@@ -417,6 +417,26 @@ class CustomNeonRetriever(BaseRetriever, BaseModel):
     async def aget_relevant_documents(self, query: str) -> List[LangchainDocument]:
         return self.get_relevant_documents(query)
 
+def get_all_related_products(video_dict):
+    """Get related products from all video titles in video_links"""
+    all_products = []  # Use list instead of set
+    seen_products = set()  # Use a set of IDs to track duplicates
+    
+    # Extract unique video titles from video_dict
+    video_titles = {entry['video_title'] for entry in video_dict.values()}
+    
+    # Get products for each video title
+    for title in video_titles:
+        if title:
+            products = get_matched_products(title)
+            for product in products:
+                # Use product ID as unique identifier
+                if product['id'] not in seen_products:
+                    seen_products.add(product['id'])
+                    all_products.append(product)
+    
+    return all_products
+
 @app.route('/')
 @app.route('/database')
 def serve_spa():
@@ -533,7 +553,7 @@ def chat():
         response_data = {
             'response': processed_answer,
             'video_links': video_dict,
-            'related_products': get_matched_products(source_documents[0].metadata.get('title', '') if source_documents else ""),
+            'related_products': get_all_related_products(video_dict),
             'urls': urls
         }
         
@@ -703,3 +723,4 @@ def upload_document():
 if __name__ == '__main__':
     verify_database()
     app.run(debug=True, port=5000)
+
