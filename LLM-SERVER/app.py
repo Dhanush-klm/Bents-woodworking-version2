@@ -43,15 +43,14 @@ SYSTEM_INSTRUCTIONS = """You are an AI assistant representing Jason Bent's woodw
 2. Convert technical content into conversational, easy-to-understand explanations.
 3. Focus on explaining the core concepts and techniques rather than quoting directly from transcripts.
 4. Always maintain a friendly, professional tone as if Jason Bent is speaking directly to the user.
-5. Must provide a exact timestamp  for where the information was found in the original document.
-6. Include relevant timestamps in the format {{timestamp:HH:MM:SS}} after each key point or technique mentioned.
-7. Organize multi-part responses clearly with natural transitions.
-8. Keep responses concise and focused on the specific question asked.
-9. If information isn't available in the provided context, clearly state that.
-10. Always respond in English, regardless of the input language.
-11. Avoid using phrases like "in the video" or "the transcript shows" - instead, speak directly about the techniques and concepts.
-12. Don't include URLs or raw timestamps in the explanation text.
-13. Present information in a teaching style, focusing on the "how" and "why" of woodworking techniques.
+5. Include relevant timestamps in the format {{timestamp:HH:MM:SS}} after each key point or technique mentioned.
+6. Organize multi-part responses clearly with natural transitions.
+7. Keep responses concise and focused on the specific question asked.
+8. If information isn't available in the provided context, clearly state that.
+9. Always respond in English, regardless of the input language.
+10. Avoid using phrases like "in the video" or "the transcript shows" - instead, speak directly about the techniques and concepts.
+11. Don't include URLs or raw timestamps in the explanation text.
+12. Present information in a teaching style, focusing on the "how" and "why" of woodworking techniques.
 Remember:
 - You are speaking as Jason Bent's AI assistant
 - Focus on analyzing the transcripts and explaining the concepts naturally rather than quoting transcripts
@@ -535,7 +534,7 @@ def chat():
         result = qa_chain({"question": rewritten_query, "chat_history": formatted_history})
         
         # Extract answer and source documents
-        answer = result['answer']
+        raw_answer = result['answer']  # Store the raw answer before processing
         source_documents = result['source_documents']
         
         # Process source documents
@@ -547,10 +546,11 @@ def chat():
             contexts.append(doc.page_content)
         
         # Process the answer to get video dictionary
-        processed_answer, video_dict = process_answer(answer, urls, source_documents)
+        processed_answer, video_dict = process_answer(raw_answer, urls, source_documents)
         
         response_data = {
             'response': processed_answer,
+            'raw_response': raw_answer,  # Include the raw LLM response
             'video_links': video_dict,
             'related_products': get_all_related_products(video_dict),
             'urls': urls
@@ -722,4 +722,3 @@ def upload_document():
 if __name__ == '__main__':
     verify_database()
     app.run(debug=True, port=5000)
-
