@@ -363,6 +363,7 @@ export default function Chat({ isVisible }) {
           <div 
             ref={productsScrollContainerRef}
             className="overflow-x-auto custom-scrollbar scroll-smooth"
+            style={{ padding: '5px' }}
           >
             <div className="flex gap-4 pb-3 min-w-min">
               {products.map((product) => (
@@ -372,22 +373,17 @@ export default function Chat({ isVisible }) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(
-                    // Base styles - reduced width
                     "flex-shrink-0 px-4 py-3 bg-white",
-                    "rounded-[8px] w-[250px]", // Reduced from 300px to 250px
-                    // Border and shadow
+                    "rounded-[8px] w-[250px]",
                     "border border-gray-200",
-                    // Hover effects
                     "transform transition-all duration-300 ease-in-out",
                     "hover:scale-[1.02] hover:shadow-lg hover:border-blue-200",
-                    // Background gradient
                     "bg-gradient-to-br from-white to-gray-50",
                     "hover:from-blue-50/50 hover:to-white",
-                    // Group styling
                     "group relative",
-                    // Cursor
                     "cursor-pointer"
                   )}
+                  style={{ marginLeft: '1px' }}
                 >
                   <div className="space-y-2">
                     {/* Title and Price Row */}
