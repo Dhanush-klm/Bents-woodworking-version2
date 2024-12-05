@@ -81,9 +81,7 @@ def rewrite_query(query, chat_history=None):
     """
     try:
         # Create prompt that's compatible with the existing LLM setup
-        rewrite_prompt = f"""As bent's woodworks assistant, rewrite this query to be more specific 
-        and searchable for woodworking content. while maintaining 
-        the original intent. Only return the rewritten query without any explanations.
+        rewrite_prompt = f"""You are bent's woodworks assistant so question will be related to wood shop. Rewrites user query to make them more specific and searchable, taking into account the chat history if provided. Only return the rewritten query without any explanations.
 
         Original query: {query}
         
