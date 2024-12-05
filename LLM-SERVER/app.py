@@ -23,7 +23,6 @@ import numpy as np
 from typing import List
 from pydantic import BaseModel, Field
 
-
 class LLMResponseError(Exception):
     pass
 
