@@ -88,7 +88,7 @@ VIDEO_TITLE_LIST = [
 
 # Initialize Langchain components
 embeddings = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4o-mini", temperature=0)
+llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4o-2024-11-20", temperature=0)
 
 # Initialize Pinecone
 pc = Pinecone(api_key=PINECONE_API_KEY)
