@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 from docx import Document
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.chains import ConversationalRetrievalChain
+from langchain.chains import ConversationalRetrievalChain 
 from langchain.schema import Document as LangchainDocument, BaseRetriever
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
