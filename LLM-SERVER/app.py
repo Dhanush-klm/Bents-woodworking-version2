@@ -36,17 +36,14 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002","https://bents-frontend-server.vercel.app","https://bents-backend-server.vercel.app"]}})
+
 # System instructions
 SYSTEM_INSTRUCTIONS = """You are an AI assistant representing Jason Bent's woodworking expertise. Your role is to:
 1. Analyze woodworking documents and provide clear, natural responses that sound like Jason Bent is explaining the concepts.
 2. Convert technical content into conversational, easy-to-understand explanations.
 3. Focus on explaining the core concepts and techniques rather than quoting directly from transcripts.
 4. Always maintain a friendly, professional tone as if Jason Bent is speaking directly to the user.
-5. Include relevant timestamps in the format {{timestamp:MM:SS}} after each key point or technique mentioned. For videos longer than an hour, use {{timestamp:HH:MM:SS}} format.
-   - Timestamps must be accurate and within the video duration 
-   - Never use timestamps greater than the video duration
-   - Always verify timestamps are in proper format (e.g., 05:30 not 5:30)
-   - Place timestamps immediately after mentioning a specific technique or point
+5. Include relevant timestamps in the format {{timestamp:HH:MM:SS}} after each key point or technique mentioned.
 6. Organize multi-part responses clearly with natural transitions.
 7. Keep responses concise and focused on the specific question asked.
 8. If information isn't available in the provided context, clearly state that.
@@ -59,9 +56,7 @@ Remember:
 - Focus on analyzing the transcripts and explaining the concepts naturally rather than quoting transcripts
 - Must provide a timestamp or location reference for where the information was found in the original document.
 - Keep responses clear, practical, and focused on woodworking expertise
-- If users ask about video details provide the video timestamp in the format {{timestamp:MM:SS}} or {{timestamp:HH:MM:SS}} for longer videos
-- Timestamps must be properly formatted with leading zeros (e.g., 05:30 not 5:30)
-- Never provide timestamps that exceed the video duration
+- If users ask about video details provide the video timestamp in the format {{timestamp:HH:MM:SS}}
 """
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
@@ -156,109 +151,112 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def validate_timestamp(timestamp, max_duration=900):  # 900 seconds = 15 minutes
-    """Validates and normalizes timestamps"""
-    try:
-        parts = timestamp.split(':')
-        if len(parts) == 2:  # MM:SS format
-            minutes, seconds = map(int, parts)
-            total_seconds = minutes * 60 + seconds
-        elif len(parts) == 3:  # HH:MM:SS format
-            hours, minutes, seconds = map(int, parts)
-            total_seconds = hours * 3600 + minutes * 60 + seconds
-        else:
-            return None
+def process_answer(answer, urls, source_documents):
+    def extract_context(text, timestamp_pos, window=150):
+        start = max(0, timestamp_pos - window)
+        end = min(len(text), timestamp_pos + window)
+        return text[start:end].strip()
 
-        # Validate the timestamp is within reasonable bounds
-        if total_seconds < 0 or total_seconds > max_duration:
-            return None
-            
-        # Return normalized HH:MM:SS format
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
+    def generate_description(context, timestamp):
+        description_prompt = f"""
+        Given this woodworking video context at {timestamp}, create an extremely concise action phrase (max 6-8 words).
+
+        Context: {context}
+
+        Rules:
+        1. Start with an action verb
+        2. Name the specific tool/technique
+        3. Must be 6-8 words only
+        4. Focus on the single main action
+        5. Be direct and clear
+
+        Example formats:
+        - "Demonstrates table saw fence alignment technique"
+        - "Installs dust collection system components"
+        - "Shows track saw cutting method"
+
+        Description:"""
+
+        try:
+            enhanced_description = llm.predict(description_prompt).strip()
+            words = enhanced_description.split()[:8]
+            return ' '.join(words)
+        except Exception as e:
+            logging.error(f"Error generating description: {str(e)}")
+            return ' '.join(context.split()[:6])
+
+    def process_timestamp(match, source_index, source_documents):
+        timestamp = match.group(1)
+        timestamp_pos = match.start()
+        context = extract_context(answer, timestamp_pos)
         
-        if hours > 0:
-            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-        return f"{minutes:02d}:{seconds:02d}"
-    except:
-        return None
-
-def extract_context(text, position, window=100):
-    """Extract context around a specific position in text"""
-    start = max(0, position - window)
-    end = min(len(text), position + window)
-    return text[start:end].strip()
-
-def generate_description(context, timestamp):
-    """Generate a description based on the context and timestamp"""
-    # Remove existing timestamps and clean up the text
-    cleaned_context = re.sub(r'\{timestamp:[^\}]+\}', '', context)
-    cleaned_context = re.sub(r'\s+', ' ', cleaned_context).strip()
-    
-    # Limit description length
-    max_length = 150
-    if len(cleaned_context) > max_length:
-        cleaned_context = cleaned_context[:max_length] + '...'
-    
-    return cleaned_context
-
-def process_timestamp(match, source_index, source_documents):
-    timestamp = match.group(1)
-    timestamp_pos = match.start()
-    
-    # Get the full text from the source document
-    source_text = source_documents[source_index].page_content if source_index < len(source_documents) else ""
-    context = extract_context(source_text, timestamp_pos)
-    
-    current_metadata = source_documents[source_index].metadata if source_index < len(source_documents) else {}
-    current_url = current_metadata.get('url', None)
-    current_title = current_metadata.get('title', "Unknown Video")
-    
-    # Validate timestamp
-    validated_timestamp = validate_timestamp(timestamp)
-    if not validated_timestamp:
-        logging.warning(f"Invalid timestamp detected: {timestamp}")
-        return None
+        current_url = urls[source_index] if source_index < len(urls) else None
+        current_metadata = source_documents[source_index].metadata if source_index < len(source_documents) else {}
+        current_title = current_metadata.get('title', "Unknown Video")
         
-    enhanced_description = generate_description(context, validated_timestamp)
+        enhanced_description = generate_description(context, timestamp)
+        
+        full_urls = [combine_url_and_timestamp(current_url, timestamp)] if current_url else []
+        
+        return {
+            'links': full_urls,
+            'timestamp': timestamp,
+            'description': enhanced_description,
+            'video_title': current_title
+        }
     
-    full_urls = [combine_url_and_timestamp(current_url, validated_timestamp)] if current_url else []
+    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
+    timestamps_info = [
+        process_timestamp(match, i, source_documents) 
+        for i, match in enumerate(timestamp_matches)
+    ]
     
-    return {
-        'links': full_urls,
-        'timestamp': validated_timestamp,
-        'description': enhanced_description,
-        'video_title': current_title
+    video_dict = {
+        str(i): {
+            'urls': entry['links'],
+            'timestamp': entry['timestamp'],
+            'description': entry['description'],
+            'video_title': entry['video_title']
+        }
+        for i, entry in enumerate(timestamps_info)
     }
+    
+    # Remove all timestamp references and any "Video X" references
+    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
+    processed_answer = re.sub(r'\[?video\s*\d+\]?', '', processed_answer, flags=re.IGNORECASE)
+    
+    # Clean up formatting
+    processed_answer = re.sub(r'"\s*$', '"', processed_answer)  # Clean up trailing spaces before quotes
+    processed_answer = re.sub(r'\s+', ' ', processed_answer)  # Clean up multiple spaces
+    processed_answer = re.sub(r'\s*\n\s*', '\n', processed_answer)  # Clean up newlines
+    processed_answer = re.sub(r'\n{3,}', '\n\n', processed_answer)  # Reduce multiple newlines
+    
+    # Format numbered lists properly
+    processed_answer = re.sub(r'(\d+)\.\s*', r'\n\1. ', processed_answer)
+    
+    # Ensure proper spacing after periods
+    processed_answer = re.sub(r'\.(?=\S)', '. ', processed_answer)
+    
+    # Clean up any remaining whitespace issues
+    processed_answer = processed_answer.strip()
+    
+    return processed_answer, video_dict
 
 def combine_url_and_timestamp(base_url, timestamp):
-    if not base_url:
-        return None
-        
-    try:
-        parts = timestamp.split(':')
-        total_seconds = 0
-        
-        if len(parts) == 2:  # MM:SS
-            minutes, seconds = map(int, parts)
-            total_seconds = minutes * 60 + seconds
-        elif len(parts) == 3:  # HH:MM:SS
-            hours, minutes, seconds = map(int, parts)
-            total_seconds = hours * 3600 + minutes * 60 + seconds
-            
-        # Ensure the timestamp is valid
-        if total_seconds < 0:
-            logging.error(f"Invalid negative timestamp: {timestamp}")
-            return base_url
-            
-        # Add timestamp parameter to URL
-        separator = '&' if '?' in base_url else '?'
-        return f"{base_url}{separator}t={total_seconds}"
-        
-    except Exception as e:
-        logging.error(f"Error processing timestamp {timestamp}: {str(e)}")
-        return base_url
+    parts = timestamp.split(':')
+    if len(parts) == 2:
+        minutes, seconds = map(int, parts)
+        total_seconds = minutes * 60 + seconds
+    elif len(parts) == 3:
+        hours, minutes, seconds = map(int, parts)
+        total_seconds = hours * 3600 + minutes * 60 + seconds
+    else:
+        raise ValueError("Invalid timestamp format")
+
+    if '?' in base_url:
+        return f"{base_url}&t={total_seconds}"
+    else:
+        return f"{base_url}?t={total_seconds}"
 
 def extract_text_from_docx(file):
     doc = Document(file)
@@ -332,65 +330,46 @@ def get_embeddings(query):
 def cosine_similarity(v1, v2):
     return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
 
-def search_neon_db(query_embedding, table_name="bents", top_k=5):
+def search_neon_db(query_embedding, table_name, top_k=5):
     conn = None
     try:
         conn = psycopg2.connect(os.getenv("POSTGRES_URL"))
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            # Modified query to better handle text content with timestamps
+            # Query with table name as parameter
             query = f"""
-                WITH content_analysis AS (
-                    SELECT 
-                        id,
-                        chunk_id,
-                        title,
-                        url,
-                        text,
-                        vector,
-                        -- Extract timestamps with surrounding context
-                        REGEXP_MATCHES(
-                            text, 
-                            '([^.]*?\d{1,2}:\d{2}(?::\d{2})?[^.]*\.)',
-                            'g'
-                        ) as timestamp_contexts
-                    FROM {table_name}
-                    WHERE vector IS NOT NULL
-                ),
-                ranked_results AS (
-                    SELECT 
-                        id,
-                        chunk_id,
-                        title,
-                        url,
-                        text,
-                        timestamp_contexts,
-                        1 - (vector <=> %s::vector) as similarity
-                    FROM content_analysis
-                    WHERE similarity > 0.5
-                )
-                SELECT * FROM ranked_results
-                ORDER BY similarity DESC
-                LIMIT %s
+                SELECT id, vector, text, title, url, chunk_id 
+                FROM {table_name}
+                WHERE vector IS NOT NULL
             """
+            cur.execute(query)
+            rows = cur.fetchall()
             
-            cur.execute(query, (str(query_embedding), top_k))
-            results = cur.fetchall()
+            similarities = []
+            for row in rows:
+                try:
+                    vector_str = row['vector']
+                    vector_values = vector_str.strip('[]').split(',')
+                    vector = np.array([float(x.strip()) for x in vector_values])
+                    
+                    if len(vector) == len(query_embedding):
+                        similarity = cosine_similarity(query_embedding, vector)
+                        similarities.append((similarity, row))
+                except Exception as e:
+                    logging.error(f"Error processing vector for row {row['id']}: {str(e)}")
+                    continue
             
-            processed_results = []
-            for result in results:
-                # Extract timestamps with their surrounding context
-                timestamp_data = extract_timestamps_with_context(result['text'])
-                
-                processed_results.append({
-                    'id': result['id'],
-                    'chunk_id': result['chunk_id'],
-                    'title': result['title'],
-                    'url': result['url'],
-                    'timestamps': timestamp_data,
-                    'similarity_score': float(result['similarity'])
-                })
-            
-            return processed_results
+            similarities.sort(reverse=True, key=lambda x: x[0])
+            return [
+                {
+                    'id': row['id'],
+                    'text': row['text'],
+                    'title': row['title'],
+                    'url': row['url'],
+                    'chunk_id': row['chunk_id'],
+                    'similarity_score': float(sim)
+                }
+                for sim, row in similarities[:top_k]
+            ]
 
     except Exception as e:
         logging.error(f"Error in search_neon_db: {str(e)}")
@@ -398,96 +377,6 @@ def search_neon_db(query_embedding, table_name="bents", top_k=5):
     finally:
         if conn:
             conn.close()
-
-def extract_timestamps_with_context(text):
-    """
-    Extract timestamps along with their surrounding context and description
-    Returns a list of dictionaries containing timestamp, context, and description
-    """
-    timestamp_data = []
-    
-    # Find all timestamp patterns in the text
-    timestamp_pattern = r'(\d{1,2}:\d{2}(?::\d{2})?)'
-    
-    # Split text into sentences
-    sentences = text.split('.')
-    
-    for i, sentence in enumerate(sentences):
-        timestamp_matches = re.finditer(timestamp_pattern, sentence)
-        
-        for match in timestamp_matches:
-            timestamp = match.group(1)
-            
-            # Get surrounding context (current sentence + previous/next if available)
-            context_start = max(0, i - 1)
-            context_end = min(len(sentences), i + 2)
-            context = '. '.join(sentences[context_start:context_end]).strip()
-            
-            # Try to find description in nearby text
-            description = extract_description_for_timestamp(context, timestamp)
-            
-            timestamp_data.append({
-                'timestamp': timestamp,
-                'context': context,
-                'description': description
-            })
-    
-    return timestamp_data
-
-def extract_description_for_timestamp(context, timestamp):
-    """
-    Extract a relevant description for the timestamp from the context
-    """
-    # Find the sentence containing the timestamp
-    sentences = context.split('.')
-    timestamp_sentence = next((s for s in sentences if timestamp in s), '')
-    
-    # Look for descriptive text after the timestamp
-    if timestamp_sentence:
-        parts = timestamp_sentence.split(timestamp)
-        if len(parts) > 1:
-            # Take text after the timestamp
-            description = parts[1].strip()
-            # Clean up any remaining timestamps
-            description = re.sub(r'\d{1,2}:\d{2}(?::\d{2})?', '', description)
-            return description.strip()
-    
-    return ''
-
-def combine_url_and_timestamp(url, timestamp_data):
-    """
-    Create a timestamped YouTube URL with context
-    """
-    base_url = url
-    if not timestamp_data.get('timestamp'):
-        return {'url': base_url, 'context': '', 'description': ''}
-    
-    try:
-        timestamp = timestamp_data['timestamp']
-        parts = timestamp.split(':')
-        total_seconds = 0
-        
-        if len(parts) == 2:  # MM:SS
-            minutes, seconds = map(int, parts)
-            total_seconds = minutes * 60 + seconds
-        elif len(parts) == 3:  # HH:MM:SS
-            hours, minutes, seconds = map(int, parts)
-            total_seconds = hours * 3600 + minutes * 60 + seconds
-        
-        # Create timestamped URL
-        separator = '&' if '?' in base_url else '?'
-        timestamped_url = f"{base_url}{separator}t={total_seconds}"
-        
-        return {
-            'url': timestamped_url,
-            'context': timestamp_data.get('context', ''),
-            'description': timestamp_data.get('description', ''),
-            'timestamp': timestamp
-        }
-        
-    except Exception as e:
-        logging.error(f"Error processing URL timestamp: {str(e)}")
-        return {'url': base_url, 'context': '', 'description': ''}
 
 def handle_query(query):
     query_embedding = get_embeddings(query)
@@ -546,40 +435,6 @@ def get_all_related_products(video_dict):
                     all_products.append(product)
     
     return all_products
-
-def process_answer(answer_text, source_documents):
-    """Process the LLM answer to extract timestamps and generate video links"""
-    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer_text))
-    timestamps_info = []
-    
-    # Extract URLs from source documents
-    urls = [doc.metadata.get('url', '') for doc in source_documents]
-    
-    for i, match in enumerate(timestamp_matches):
-        info = process_timestamp(match, i, source_documents)
-        if info:  # Only add valid timestamps
-            timestamps_info.append(info)
-    
-    video_dict = {
-        str(i): {
-            'urls': entry['links'],
-            'timestamp': entry['timestamp'],
-            'description': entry['description'],
-            'video_title': entry['video_title']
-        }
-        for i, entry in enumerate(timestamps_info)
-    }
-    
-    # Clean up the answer text
-    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer_text)
-    processed_answer = re.sub(r'\[?video\s*\d+\]?', '', processed_answer, flags=re.IGNORECASE)
-    processed_answer = re.sub(r'"\s*$', '"', processed_answer)
-    processed_answer = re.sub(r'\s+', ' ', processed_answer)
-    processed_answer = re.sub(r'\s*\n\s*', '\n', processed_answer)
-    processed_answer = re.sub(r'\n{3,}', '\n\n', processed_answer)
-    processed_answer = processed_answer.strip()
-    
-    return processed_answer, video_dict
 
 @app.route('/')
 @app.route('/database')
@@ -706,15 +561,23 @@ def chat():
         raw_answer = result['answer']  # Store the raw answer before processing
         source_documents = result['source_documents']
         
+        # Process source documents
+        urls = []
+        contexts = []
+        for doc in source_documents:
+            if 'url' in doc.metadata:
+                urls.append(doc.metadata['url'])
+            contexts.append(doc.page_content)
+        
         # Process the answer to get video dictionary
-        processed_answer, video_dict = process_answer(raw_answer, source_documents)
+        processed_answer, video_dict = process_answer(raw_answer, urls, source_documents)
         
         response_data = {
             'response': processed_answer,
-            'raw_response': raw_answer,
+            'raw_response': raw_answer,  # Include the raw LLM response
             'video_links': video_dict,
             'related_products': get_all_related_products(video_dict),
-            'urls': [doc.metadata.get('url', '') for doc in source_documents]
+            'urls': urls
         }
         
         return jsonify(response_data)
