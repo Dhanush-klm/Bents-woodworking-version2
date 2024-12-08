@@ -9,6 +9,213 @@ import { cn } from "@/lib/utils";
 // Update these imports to use relative paths
 import { Textarea } from "./components/ui/textarea";
 
+// Define all styles in one place at the top of the file
+const baseStyles = `
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+`;
+
+const watermarkStyles = `
+  .watermark-background {
+    position: relative;
+    background: linear-gradient(
+      135deg,
+      #f8fafc 0%,
+      #f1f5f9 100%
+    );
+    min-height: 100vh;
+  }
+`;
+
+const formattingStyles = `
+  .prose {
+    max-width: none;
+    width: 100%;
+  }
+
+  .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #1f2937;
+  }
+
+  .prose p {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+    color: #4b5563;
+  }
+
+  .prose strong {
+    font-weight: 700;
+    color: #1f2937;
+    display: block;
+    margin-top: 0.5rem;
+    margin-bottom: 0;
+    padding-bottom: 0.25rem;
+  }
+
+  .numbered-section {
+    margin: 1.5rem 0;
+  }
+
+  .numbered-title {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: #1f2937;
+  }
+
+  .numbered-title .main-title {
+    font-weight: 700;
+  }
+
+  .section-content {
+    margin-left: 1.5rem;
+  }
+
+  .section-header {
+    font-size: 1rem;
+    margin: 1rem 0 0.5rem 0;
+    color: #374151;
+  }
+
+  .section-header strong {
+    font-weight: 600;
+  }
+
+  .list-item {
+    margin: 0.5rem 0 0.5rem 1rem;
+    line-height: 1.5;
+    color: #4b5563;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .bold-text {
+    margin: 1rem 0;
+    font-size: 1.1rem;
+    color: #1f2937;
+    font-weight: 600;
+    display: block;
+  }
+
+  .inline-header {
+    display: inline;
+    color: #374151;
+  }
+
+  .inline-header strong {
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .prose a {
+    color: #3b82f6;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .prose a:hover {
+    color: #2563eb;
+    text-decoration: underline;
+  }
+
+  .space-y-1 > * + * {
+    margin-top: 0.25rem;
+  }
+
+  .space-y-2 > * + * {
+    margin-top: 0.5rem;
+  }
+
+  .break-words {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .whitespace-pre-line {
+    white-space: pre-line;
+  }
+
+  /* Video section styles */
+  .video-section {
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 0.5rem;
+  }
+
+  .video-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+  }
+
+  .video-timestamp {
+    font-size: 0.875rem;
+    color: #6b7280;
+  }
+
+  /* Product section styles */
+  .product-section {
+    background: #ffffff;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 1rem 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+
+  .product-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+  }
+
+  .product-price {
+    font-size: 0.875rem;
+    color: #3b82f6;
+    font-weight: 600;
+  }
+
+  .product-description {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin: 0.5rem 0;
+  }
+
+  .numbered-title .main-title {
+    font-weight: 700;
+  }
+
+  .section-header strong {
+    font-weight: 600;
+  }
+`;
+
+// Combine all styles
+const combinedStyles = `
+  ${baseStyles}
+  ${watermarkStyles}
+  ${formattingStyles}
+`;
+
+// Create and inject styles
+(() => {
+  const styleEl = document.createElement("style");
+  styleEl.innerText = combinedStyles;
+  document.head.appendChild(styleEl);
+})();
+
 // Function to extract YouTube video ID from URL
 const getYoutubeVideoIds = (urls) => {
   if (!urls || !Array.isArray(urls) || urls.length === 0) return [];
@@ -20,7 +227,7 @@ const getYoutubeVideoIds = (urls) => {
   }).filter(id => id !== null);
 };
 
-// Replace the woodworkingFacts array with processingSteps
+// Restore the processingSteps array
 const processingSteps = [
   "Understanding query",
   "Searching knowledge base",
@@ -28,53 +235,51 @@ const processingSteps = [
   "Generating answer"
 ];
 
-// Add this new CSS-in-JS style block near the top of the file
-const watermarkStyles = `
-  .watermark-background {
-    position: relative;
-    background: linear-gradient(
-      135deg,
-      #f8fafc 0%,
-      #f1f5f9 100%
-    );
-    min-height: 100vh;
-  }
-
-  .watermark-background::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100vh;
-    background-image: 
-      radial-gradient(circle at 25px 25px, rgba(148, 163, 184, 0.05) 2%, transparent 15%),
-      radial-gradient(circle at 75px 75px, rgba(148, 163, 184, 0.05) 2%, transparent 15%);
-    background-size: 100px 100px;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .watermark-background::after {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100vh;
-    background-image: 
-      radial-gradient(circle at 50px 50px, rgba(148, 163, 184, 0.03) 2%, transparent 12%);
-    background-size: 100px 100px;
-    background-position: 25px 25px;
-    pointer-events: none;
-    z-index: 0;
-  }
-`;
 export const maxDuration = 300; 
+const LOCAL_STORAGE_KEY = 'chat_sessions';
+
 export default function Chat({ isVisible }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentConversation, setCurrentConversation] = useState([]);
+  const [sessions, setSessions] = useState(() => {
+    try {
+      const savedSessions = localStorage.getItem(LOCAL_STORAGE_KEY);
+      return savedSessions ? JSON.parse(savedSessions) : [{
+        id: uuidv4(),
+        conversations: []
+      }];
+    } catch (error) {
+      console.error('Error loading sessions:', error);
+      return [{
+        id: uuidv4(),
+        conversations: []
+      }];
+    }
+  });
+  const [currentSessionId, setCurrentSessionId] = useState(() => {
+    try {
+      const savedCurrentSessionId = localStorage.getItem('current_session_id');
+      return savedCurrentSessionId || sessions[0]?.id || null;
+    } catch (error) {
+      console.error('Error loading current session ID:', error);
+      return sessions[0]?.id || null;
+    }
+  });
+  const [currentConversation, setCurrentConversation] = useState(() => {
+    try {
+      const savedSessions = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedSessions) {
+        const parsedSessions = JSON.parse(savedSessions);
+        const savedCurrentSessionId = localStorage.getItem('current_session_id');
+        const currentSession = parsedSessions.find(session => session.id === savedCurrentSessionId);
+        return currentSession?.conversations || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      return [];
+    }
+  });
   const [currentSourceVideos, setCurrentSourceVideos] = useState([]); // Add this line
   const [conversationHistory, setConversationHistory] = useState({
     "bents": [],
@@ -91,11 +296,9 @@ export default function Chat({ isVisible }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showCenterSearch, setShowCenterSearch] = useState(true);
   const [randomQuestions, setRandomQuestions] = useState([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const sidebarRef = useRef(null);
   const [selectedConversation, setSelectedConversation] = useState(null);
-  const [sessions, setSessions] = useState([]);
-  const [currentSessionId, setCurrentSessionId] = useState(null);
   const dropdownRef = useRef(null);
   const [currentFactIndex, setCurrentFactIndex] = useState(0);
   const topOfConversationRef = useRef(null);
@@ -115,99 +318,81 @@ export default function Chat({ isVisible }) {
 
   // Initial Setup Effect
   useEffect(() => {
-    const fetchSessions = async () => {
+    const initializeChat = async () => {
       try {
-        const guestId = 'guest-user';
-        const response = await axios.get(`https://bents-backend-server.vercel.app/api/get-session/${guestId}`);
-        const storedSessions = response.data || [];
-        setSessions(storedSessions);
-
-        if (storedSessions.length === 0 || storedSessions[storedSessions.length - 1].conversations.length > 0) {
-          const newSessionId = uuidv4();
-          const newSession = { id: newSessionId, conversations: [] };
-          setSessions([...storedSessions, newSession]);
-          setCurrentSessionId(newSessionId);
-        } else {
-          setCurrentSessionId(storedSessions[storedSessions.length - 1].id);
-        }
-      } catch (error) {
-        console.error("Error fetching sessions:", error);
-      }
-    };
-
-    const fetchInitialData = async () => {
-      try {
+        // Only fetch random questions, don't modify session state
         const response = await axios.get('https://bents-backend-server.vercel.app/api/random-questions');
         setRandomQuestions(response.data.map(q => q.question_text));
+        setIsSidebarOpen(false);
       } catch (error) {
-        console.error("Error fetching random questions:", error);
-      }
-    };
-
-    fetchSessions();
-    fetchInitialData();
-    setCurrentConversation([]);
-    setShowInitialQuestions(true);
-    setShowCenterSearch(true);
-    setIsSidebarOpen(false);
-  }, []);
-
-  // Save sessions effect
-  useEffect(() => {
-    const saveSessions = async () => {
-      if (sessions.length > 0) {
-        try {
-          const guestId = 'guest-user';
-          const optimizedSessions = sessions.map(session => ({
-            id: session.id,
-            conversations: session.conversations.map(conv => ({
-              question: conv.question,
-              text: conv.text,
-              video: conv.video || [],
-              videoLinks: conv.videoLinks || {},
-              timestamp: conv.timestamp
-            }))
-          }));
-
-          await axios.post('https://bents-backend-server.vercel.app/api/save-session', {
-            userId: guestId,
-            sessionData: optimizedSessions
-          });
-        } catch (error) {
-          console.error("Error saving sessions:", error);
-        }
-      }
-    };
-
-    saveSessions();
-  }, [sessions]);
-
-  // Scroll effect
-  useEffect(() => {
-    if (shouldScrollToTop && topOfConversationRef.current) {
-      topOfConversationRef.current.scrollIntoView({ behavior: 'smooth' });
-      setShouldScrollToTop(false);
-    }
-  }, [shouldScrollToTop]);
-
-  // Click outside effects
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsDropdownOpen(false);
-      }
-      if (isSidebarOpen && sidebarRef.current && !sidebarRef.current.contains(event.target)) {
+        console.error("Error in initial setup:", error);
         setIsSidebarOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isSidebarOpen]);
+    initializeChat();
+  }, []);
 
-  // Update the handleSearch function
+  // Add this effect to persist sessions
+  useEffect(() => {
+    if (sessions.length > 0) {
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessions));
+      } catch (error) {
+        console.error('Error saving sessions:', error);
+      }
+    }
+  }, [sessions]);
+
+  // Add this effect to maintain current session
+  useEffect(() => {
+    if (currentSessionId) {
+      try {
+        localStorage.setItem('current_session_id', currentSessionId);
+        const currentSession = sessions.find(session => session.id === currentSessionId);
+        if (currentSession) {
+          setCurrentConversation(currentSession.conversations);
+          setShowInitialQuestions(currentSession.conversations.length === 0);
+        }
+      } catch (error) {
+        console.error('Error maintaining current session:', error);
+      }
+    }
+  }, [currentSessionId, sessions]);
+
+  // Restore the loading card functionality
+  const renderLoadingCard = () => {
+    const currentStep = processingSteps[Math.floor(loadingProgress / 25)];
+    
+    return (
+      <div 
+        ref={loadingCardRef}
+        className={cn(
+          "w-full p-4 mb-4",
+          "bg-white rounded-lg shadow-sm",
+          "border border-gray-200",
+          "transform transition-all duration-300"
+        )}
+      >
+        <div className="flex flex-col space-y-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <span className="text-sm font-medium text-gray-700">{currentStep}</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-1.5">
+            <div 
+              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${loadingProgress}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Restore the loading progress functionality in handleSearch
   const handleSearch = async (e, index) => {
     e.preventDefault();
     const query = index !== undefined ? randomQuestions[index] : searchQuery;
@@ -218,135 +403,109 @@ export default function Chat({ isVisible }) {
     setLoadingProgress(0);
     if (index !== undefined) {
       setLoadingQuestionIndex(index);
-      setSearchQuery(randomQuestions[index]); // Set search query for random questions
-      
-      // Add this: Trigger textarea resize after setting FAQ question
-      setTimeout(() => {
-        const textarea = document.querySelector('.auto-expand-textarea');
-        if (textarea) {
-          autoResizeTextarea(textarea);
-        }
-      }, 0);
+      setSearchQuery(randomQuestions[index]);
     }
     setShowInitialQuestions(false);
 
-    // Don't clear the search query immediately when loading
-    const currentQuery = query;
-
-    // Scroll to loading card after state updates
-    setTimeout(() => {
-      if (loadingCardRef.current) {
-        loadingCardRef.current.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'center'
-        });
-      }
-    }, 100);
-
-    // Start progress interval with faster initial steps
-    const progressInterval = setInterval(() => {
+    // Fast progress for first three steps
+    const fastProgressInterval = setInterval(() => {
       setLoadingProgress(prev => {
-        // First three steps complete quickly (0-75%)
-        if (prev < 75) {
-          return prev + 5; // Faster increment for first three steps
+        if (prev >= 75) {
+          clearInterval(fastProgressInterval);
+          return 75;
         }
-        // Last step (Generating answer) takes most of the time (75-100%)
-        if (prev >= 75 && prev < 100) {
-          return prev + 0.5; // Slower increment for final step
-        }
-        clearInterval(progressInterval);
-        return 100;
+        return prev + 5; // Faster increment for first three steps
       });
-    }, 100); // Reduced interval time
+    }, 50); // Shorter interval for faster progress
 
     try {
       const response = await axios.post('https://bents-backend-server.vercel.app/chat', {
-        message: currentQuery,
+        message: query,
         selected_index: selectedIndex,
         chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
       }, {
         timeout: 300000
       });
-      
-      // Process related products from the response
-      const responseProducts = response.data.related_products?.map(product => ({
-        id: product.id || uuidv4(),
-        title: product.title || '',
-        link: product.link || '',
-        description: product.description || '',
-        price: product.price || '',
-        category: product.category || ''
-      })) || [];
-      
-      // Create new conversation with its own products
+
+      // Complete the progress bar only after response is received
+      setLoadingProgress(100);
+
       const newConversation = {
-        id: uuidv4(), // Add unique ID for each conversation
-        question: currentQuery,
+        id: uuidv4(),
+        question: query,
         text: response.data.response,
         initial_answer: response.data.initial_answer,
         video: response.data.urls || [],
         video_titles: response.data.video_titles || [],
         video_timestamps: response.data.video_timestamps || {},
         videoLinks: response.data.video_links || {},
-        related_products: responseProducts, // Store products specific to this conversation
+        related_products: response.data.related_products || [],
         timestamp: new Date().toISOString()
       };
-      
-      // Update current conversation while preserving previous conversations' products
-      setCurrentConversation(prev => [...prev, newConversation]);
-      
-      // Update sessions
-      setSessions(prevSessions => {
-        return prevSessions.map(session => {
-          if (session.id === currentSessionId) {
-            return {
-              ...session,
-              conversations: [...session.conversations, newConversation]
-            };
-          }
-          return session;
+
+      // Update conversation and sessions while maintaining the loading state
+      setCurrentConversation(prev => {
+        const updatedConversation = [...prev, newConversation];
+        setSessions(prevSessions => {
+          const updatedSessions = prevSessions.map(session => {
+            if (session.id === currentSessionId) {
+              return {
+                ...session,
+                conversations: updatedConversation
+              };
+            }
+            return session;
+          });
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedSessions));
+          return updatedSessions;
         });
+        return updatedConversation;
       });
 
       setSearchQuery("");
-
     } catch (error) {
-      console.error("Error fetching response:", error);
+      console.error("Error in handleSearch:", error);
+      clearInterval(fastProgressInterval);
+      setLoadingProgress(0);
       setSearchQuery("");
     } finally {
-      clearInterval(progressInterval);
       setIsLoading(false);
       setLoadingQuestionIndex(null);
       setIsSearching(false);
-      setLoadingProgress(0);
     }
+  };
+
+  // Update handleNewConversation to properly handle session creation
+  const handleNewConversation = () => {
+    const newSessionId = uuidv4();
+    const newSession = { id: newSessionId, conversations: [] };
+    
+    setSessions(prevSessions => {
+      const updatedSessions = [...prevSessions, newSession];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedSessions));
+      } catch (error) {
+        console.error('Error saving new session:', error);
+      }
+      return updatedSessions;
+    });
+    
+    setCurrentSessionId(newSessionId);
+    try {
+      localStorage.setItem('current_session_id', newSessionId);
+    } catch (error) {
+      console.error('Error saving new session ID:', error);
+    }
+    
+    setCurrentConversation([]);
+    setShowInitialQuestions(true);
+    setShowCenterSearch(true);
   };
 
   // Helper function to extract video title from URL (you'll need to implement this)
   const extractVideoTitle = (url) => {
     // This is a placeholder. Implement according to your needs
     return `Video ${Math.floor(Math.random() * 1000)}`;
-  };
-
-  // Handle new conversation
-  const handleNewConversation = () => {
-    // Check if current session exists and is empty
-    const currentSession = sessions.find(session => session.id === currentSessionId);
-    if (currentSession && currentSession.conversations.length === 0) {
-      // If current session is empty, just reset the state without creating a new session
-      setCurrentConversation([]);
-      setShowInitialQuestions(true);
-      setShowCenterSearch(true);
-      return;
-    }
-    // If current session is not empty or doesn't exist, create a new session
-    const newSessionId = uuidv4();
-    const newSession = { id: newSessionId, conversations: [] };
-    setSessions(prevSessions => [...prevSessions, newSession]);
-    setCurrentSessionId(newSessionId);
-    setCurrentConversation([]);
-    setShowInitialQuestions(true);
-    setShowCenterSearch(true);
   };
 
   // Update the renderRelatedProducts function
@@ -489,112 +648,48 @@ export default function Chat({ isVisible }) {
     return null;
   };
 
+  // Update the formatResponse function
   const formatResponse = (text, videoLinks) => {
+    if (!text) return null;
+    
     let formattedText = text;
 
-    // First, normalize line endings and split into lines
-    formattedText = formattedText.replace(/\r\n/g, '\n');
-    let lines = formattedText.split('\n');
-    
-    // Process each line
-    lines = lines.map(line => {
-      // Handle bullet points (lines starting with hyphen)
-      if (line.trim().startsWith('-')) {
-        return `<div class="flex items-center space-x-2 ml-4 my-1">
-          <span class="text-gray-600"></span>
-          <span>${line.trim().substring(1).trim()}</span>
-        </div>`;
-      }
-      return line;
-    }).join('\n');
-    
-    formattedText = lines;
+    // Initial cleanup
+    formattedText = formattedText
+      .replace(/\r\n/g, '\n')                    // Normalize line breaks
+      .replace(/###/g, '')                       // Remove ### symbols completely
+      .replace(/^\s+|\s+$/gm, '')                // Remove leading/trailing whitespace
+      .replace(/([^:]+):\s*/g, '$1\n')           // Replace colon with newline for context
+      .replace(/^\d+[\.\)]?\s*/gm, '')           // Remove numbers
+      .replace(/^[-–]\s*/gm, '')                 // Remove hyphens at start of lines
+      .trim();                                   // Trim the entire text
 
-    // Handle video links replacement
-    if (videoLinks) {
-      formattedText = formattedText.replace(/\[video(\d+)\]/g, (match, p1) => {
-        const links = videoLinks[`[video${p1}]`];
-        if (links && links.urls && links.urls.length > 0) {
-          return `<a href="${links.urls[0]}" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Video ${p1}</a>`;
-        }
-        return match;
-      });
-    }
-
-    // Handle headers with bold text (###** **) - Multiple patterns
+    // Add numbering to main bold headings with full bold (font-bold)
+    let boldCounter = 1;
     formattedText = formattedText.replace(
-      /^(#{1,6})\s*\*\*(.*?)\*\*/gm,
-      (match, hashes, content) => {
-        const level = hashes.length;
-        const fontSize = {
-          1: 'text-2xl',
-          2: 'text-xl',
-          3: 'text-lg',
-          4: 'text-base',
-          5: 'text-sm',
-          6: 'text-xs'
-        }[level] || 'text-base';
-        return `<h${level} class="font-bold ${fontSize} mt-4 mb-2">${content}</h${level}>`;
-      }
+      /(?:^|\n\n)\s*\*\*(.*?)\*\*\s*\n*/g,
+      (match, content) => `\n\n<strong class="font-bold block mb-0">${boldCounter++}. ${content.trim()}</strong>\n`
     );
 
-    // Handle regular headers (###)
+    // Handle remaining headings with semi-bold and italic
     formattedText = formattedText.replace(
-      /^(#{1,6})\s*(.*?)$/gm,
-      (match, hashes, content) => {
-        const level = hashes.length;
-        const fontSize = {
-          1: 'text-2xl',
-          2: 'text-xl',
-          3: 'text-lg',
-          4: 'text-base',
-          5: 'text-sm',
-          6: 'text-xs'
-        }[level] || 'text-base';
-        return `<h${level} class="font-bold ${fontSize} mt-4 mb-2">${content}</h${level}>`;
-      }
+      /\*\*(.*?)\*\*\s*\n*/g,
+      (match, content) => `<strong class="font-semibold italic block mb-0">${content.trim()}</strong>`
     );
 
-    // Handle bold text (**text**)
-    formattedText = formattedText.replace(
-      /\*\*(.*?)\*\*/g,
-      '<strong class="font-bold">$1</strong>'
-    );
+    // Final cleanup
+    formattedText = formattedText
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/\s*\n\s*/g, '\n')
+      .replace(/\*\*\*\*timestamp\*\*\*\*/g, '')
+      .replace(/:\s*\n/g, '\n')
+      .replace(/(?<=<\/strong>)\s*[-–]\s*/g, '')
+      .trim();
 
-    // Handle numbered points with bold titles
-    formattedText = formattedText.replace(
-      /(\d+)\.\s*\*\*(.*?)\*\*(:?)\s*([-–\s]*)(.+)/g,
-      (match, number, title, colon, dash, content) => `
-        <div class="mt-3 mb-2">
-          <div class="font-bold">${number}. ${title}${colon}</div>
-          <div class="ml-6 mt-1">${dash}${content}</div>
-        </div>
-      `
-    );
-
-    // Handle regular numbered points
-    formattedText = formattedText.replace(
-      /(\d+)\.\s+([^*].*?)(?=\n|$)/g,
-      (match, number, content) => `
-        <div class="mt-2 mb-1 ml-4">
-          <div>${number}. ${content}</div>
-        </div>
-      `
-    );
-
-    // Clean up any timestamp markers
-    formattedText = formattedText.replace(/\*\*\*\*timestamp\*\*\*\*/g, '');
-
-    // Add wrapper div for bullet points if they exist
-    if (formattedText.includes('class="flex items-center space-x-2 ml-4')) {
-      formattedText = `<div class="space-y-1">${formattedText}</div>`;
-    }
-
-    // Wrap in container with proper styling
     return (
       <div 
         dangerouslySetInnerHTML={{ __html: formattedText }}
-        className="prose prose-slate max-w-none break-words whitespace-pre-line space-y-2"
+        className="prose prose-slate max-w-none break-words whitespace-pre-line"
         style={{
           width: '100%',
           maxWidth: '100%',
@@ -605,50 +700,26 @@ export default function Chat({ isVisible }) {
     );
   };
 
-  // Update autoResizeTextarea function
-  const autoResizeTextarea = (element) => {
-    if (!element) return;
-    
-    // Reset height to auto first
-    element.style.height = 'auto';
-    
-    const isMobile = window.innerWidth < 768;
-    const maxHeight = isMobile ? 200 : 100; // Different max heights
-    
-    // Calculate new height
-    const newHeight = Math.min(element.scrollHeight, maxHeight);
-    element.style.height = `${newHeight}px`;
-    
-    // Handle overflow
-    if (element.scrollHeight > maxHeight) {
-      element.style.overflowY = 'auto';
-    } else {
-      element.style.overflowY = 'hidden';
-    }
+  // Add these helper functions
+  const cleanupText = (text) => {
+    return text
+      .replace(/\s+/g, ' ')
+      .replace(/\n\s*\n/g, '\n')
+      .replace(/\s*-\s*/g, '-')
+      .trim();
   };
 
-  // Add useEffect for handling window resize
-  useEffect(() => {
-    const handleResize = () => {
-      const textarea = document.querySelector('.question-textarea');
-      if (textarea) {
-        autoResizeTextarea(textarea);
-      }
-    };
+  const formatNestedList = (text) => {
+    const lines = text.split('\n');
+    let level = 0;
+    return lines.map(line => {
+      const indent = line.match(/^\s*/)[0].length;
+      level = Math.floor(indent / 2);
+      return `<div class="list-item level-${level}">${line.trim()}</div>`;
+    }).join('\n');
+  };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Add useEffect for handling searchQuery changes
-  useEffect(() => {
-    const textarea = document.querySelector('.question-textarea');
-    if (textarea) {
-      autoResizeTextarea(textarea);
-    }
-  }, [searchQuery]);
-
-  // Update renderSearchBar function
+  // Update the renderSearchBar function
   const renderSearchBar = () => (
     <div className="flex flex-col items-center w-full px-2 sm:px-0">
       {currentConversation.length === 0 && (
@@ -752,25 +823,24 @@ export default function Chat({ isVisible }) {
             <X size={24} />
           </button>
           <h2 className="text-xl font-bold mb-4 mt-8">History</h2>
-          {sortedSessions.map((session) => (
+          {sessions.map((session) => (
             <div
               key={session.id}
               className={`cursor-pointer hover:bg-gray-100 p-2 rounded mb-2 ${
                 session.id === currentSessionId ? 'bg-gray-100' : ''
               }`}
-              onClick={() => {
-                setCurrentSessionId(session.id);
-                setCurrentConversation(session.conversations || []);
-                setShowInitialQuestions(false);
-                setShowCenterSearch(false);
-                setIsSidebarOpen(false);
-              }}
+              onClick={() => handleHistorySelect(session.id)}
             >
               {session.conversations && session.conversations.length > 0 ? (
                 <p className="text-sm truncate">{session.conversations[0].question}</p>
               ) : (
                 <p className="text-sm italic text-gray-500">New conversation</p>
               )}
+              <p className="text-xs text-gray-500">
+                {session.conversations && session.conversations.length > 0
+                  ? new Date(session.conversations[0].timestamp).toLocaleDateString()
+                  : 'No messages'}
+              </p>
             </div>
           ))}
         </div>
@@ -778,9 +848,20 @@ export default function Chat({ isVisible }) {
     </>
   );
 
-  // Update the renderLoadingFact function
+  // Add this effect to handle loading card scroll
+  useEffect(() => {
+    if (isLoading && loadingCardRef.current) {
+      setTimeout(() => {
+        loadingCardRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }, 100);
+    }
+  }, [isLoading]);
+
+  // Update the renderLoadingFact function to use the ref
   const renderLoadingFact = () => {
-    // Adjust step calculation to make first three steps complete quickly
     const currentStep = loadingProgress >= 75 ? 3 : Math.floor((loadingProgress / 75) * 3);
     
     return (
@@ -932,10 +1013,22 @@ export default function Chat({ isVisible }) {
     );
   };
 
-  // Update the renderConversation function to include both products and videos
+  // Update the scroll effect to ensure it works properly
+  useEffect(() => {
+    if (latestConversationRef.current && currentConversation.length > 0) {
+      setTimeout(() => {
+        latestConversationRef.current.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }, 100); // Small delay to ensure content is rendered
+    }
+  }, [currentConversation.length]);
+
+  // Update the renderConversation function to properly use the ref
   const renderConversation = (conv, index) => (
     <div 
-      key={conv.id} // Use conversation's unique ID as key
+      key={conv.id}
       className={cn(
         "bg-white p-6 rounded-[8px] shadow mb-4 break-words whitespace-normal",
         index === 0 ? "mt-4" : ""
@@ -946,7 +1039,6 @@ export default function Chat({ isVisible }) {
       <div className="mb-4 break-words whitespace-normal">
         {formatResponse(conv.text || '', conv.videoLinks)}
       </div>
-      {/* Render products specific to this conversation */}
       {conv.related_products && conv.related_products.length > 0 && (
         <div className="mt-4">
           {renderRelatedProducts(conv.related_products)}
@@ -956,61 +1048,7 @@ export default function Chat({ isVisible }) {
     </div>
   );
 
-  // Update the scroll effect to use the latest conversation ref
-  useEffect(() => {
-    if (latestConversationRef.current) {
-      latestConversationRef.current.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'start'
-      });
-    }
-  }, [currentConversation.length]); // This will trigger when a new conversation is added
-
   // Move the useEffect inside the component
-  useEffect(() => {
-    const slider = productsScrollContainerRef.current;
-    if (!slider) return;
-
-    let isDown = false;
-    let startX;
-    let scrollLeft;
-
-    const handleMouseDown = (e) => {
-      isDown = true;
-      startX = e.pageX - slider.offsetLeft;
-      scrollLeft = slider.scrollLeft;
-    };
-
-    const handleMouseLeave = () => {
-      isDown = false;
-    };
-
-    const handleMouseUp = () => {
-      isDown = false;
-    };
-
-    const handleMouseMove = (e) => {
-      if (!isDown) return;
-      e.preventDefault();
-      const x = e.pageX - slider.offsetLeft;
-      const walk = (x - startX) * 2; // Scroll speed multiplier
-      slider.scrollLeft = scrollLeft - walk;
-    };
-
-    slider.addEventListener('mousedown', handleMouseDown);
-    slider.addEventListener('mouseleave', handleMouseLeave);
-    slider.addEventListener('mouseup', handleMouseUp);
-    slider.addEventListener('mousemove', handleMouseMove);
-
-    return () => {
-      slider.removeEventListener('mousedown', handleMouseDown);
-      slider.removeEventListener('mouseleave', handleMouseLeave);
-      slider.removeEventListener('mouseup', handleMouseUp);
-      slider.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, []);
-
-  // Add this to your component
   useEffect(() => {
     const setVH = () => {
       let vh = window.innerHeight * 0.01;
@@ -1021,6 +1059,81 @@ export default function Chat({ isVisible }) {
     window.addEventListener('resize', setVH);
     return () => window.removeEventListener('resize', setVH);
   }, []);
+
+  // Add these effects after your existing useEffects
+  useEffect(() => {
+    if (sessions.length > 0 && currentSessionId) {
+      const currentSession = sessions.find(session => session.id === currentSessionId);
+      if (currentSession) {
+        setCurrentConversation(currentSession.conversations);
+        localStorage.setItem('current_session_id', currentSessionId);
+        setShowInitialQuestions(currentSession.conversations.length === 0);
+      }
+    }
+  }, [sessions, currentSessionId]);
+
+  useEffect(() => {
+    const savedCurrentSessionId = localStorage.getItem('current_session_id');
+    if (savedCurrentSessionId) {
+      const savedSessions = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (savedSessions) {
+        const parsedSessions = JSON.parse(savedSessions);
+        const lastActiveSession = parsedSessions.find(session => session.id === savedCurrentSessionId);
+        if (lastActiveSession) {
+          setCurrentSessionId(lastActiveSession.id);
+          setCurrentConversation(lastActiveSession.conversations);
+          setShowInitialQuestions(lastActiveSession.conversations.length === 0);
+          setSessions(parsedSessions);
+        }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (sessions.length > 0) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessions));
+    }
+  }, [sessions]);
+
+  // Add this function to handle history selection
+  const handleHistorySelect = (sessionId) => {
+    const selectedSession = sessions.find(session => session.id === sessionId);
+    if (selectedSession) {
+      setCurrentSessionId(sessionId);
+      setCurrentConversation(selectedSession.conversations);
+      setShowInitialQuestions(selectedSession.conversations.length === 0);
+      setIsSidebarOpen(false); // Close sidebar after selection
+    }
+  };
+
+  // Add this effect to handle browser refresh
+  useEffect(() => {
+    const handleBrowserRefresh = (event) => {
+      // Create new session
+      const newSessionId = uuidv4();
+      const newSession = { id: newSessionId, conversations: [] };
+      
+      // Update sessions in localStorage
+      const updatedSessions = [...sessions, newSession];
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedSessions));
+      localStorage.setItem('current_session_id', newSessionId);
+      
+      // Clear current conversation
+      setCurrentSessionId(newSessionId);
+      setCurrentConversation([]);
+      setShowInitialQuestions(true);
+      setShowCenterSearch(true);
+      setSearchQuery("");
+    };
+
+    // Add event listener for beforeunload (browser refresh)
+    window.addEventListener('beforeunload', handleBrowserRefresh);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('beforeunload', handleBrowserRefresh);
+    };
+  }, [sessions]);
 
   // Main render
   return (
@@ -1126,297 +1239,6 @@ const styles = `
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
-  
-  @media (max-width: 640px) {
-    .overflow-x-auto {
-      -webkit-overflow-scrolling: touch;
-      scroll-snap-type: x mandatory;
-    }
-    
-    .flex-shrink-0 {
-      scroll-snap-align: start;
-    }
-  }
-
-  .scrollable-textarea {
-    scrollbar-width: none !important;
-    -ms-overflow-style: none !important;
-    overflow-y: scroll !important;
-  }
-
-  .scrollable-textarea::-webkit-scrollbar {
-    width: 0 !important;
-    display: none !important;
-  }
-
-  textarea {
-    font-family: inherit;
-    font-size: inherit;
-    line-height: 1.5;
-    white-space: pre-wrap !important;
-    overflow-wrap: break-word !important;
-    word-wrap: break-word !important;
-    transition: height 0.2s ease-in-out !important;
-  }
-
-  .resize-none {
-    resize: none !important;
-  }
-
-  @keyframes pulseScale {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
-  }
-
-  .scrollbar-thin {
-    scrollbar-width: thin;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar {
-    height: 6px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: rgb(209 213 219);
-    border-radius: 3px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(156 163 175);
-  }
-
-  .break-words {
-    word-wrap: break-word;
-    word-break: normal;
-    white-space: normal;
-    overflow-wrap: break-word;
-  }
-
-  /* Add specific styles for conversation containers */
-  .conversation-text {
-    width: 100%;
-    max-width: 100%;
-    word-wrap: break-word;
-    word-break: normal;
-    white-space: normal;
-    overflow-wrap: break-word;
-  }
-
-  @media (max-width: 768px) {
-    .conversation-container {
-      padding-top: 48px; /* Add top padding to prevent text hiding behind button */
-    }
-
-    /* Ensure the loading state and other content also respects the padding */
-    .loading-container {
-      padding-top: 48px;
-    }
-  }
-
-  .scroll-smooth {
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  @media (hover: none) {
-    .hide-scrollbar {
-      -webkit-overflow-scrolling: touch;
-      scroll-snap-type: x mandatory;
-    }
-    
-    .hide-scrollbar > div > a {
-      scroll-snap-align: start;
-    }
-  }
-
-  .auto-expand-textarea {
-    overflow: hidden !important;
-    resize: none !important;
-    min-height: 42px !important;
-    max-height: none !important;
-    transition: height 0.1s ease-out !important;
-    padding-bottom: 8px !important;
-  }
-
-  .auto-expand-textarea:focus {
-    outline: none !important;
-  }
-
-  textarea {
-    font-family: inherit;
-    font-size: inherit;
-    line-height: 1.5;
-    white-space: pre-wrap !important;
-    overflow-wrap: break-word !important;
-    word-wrap: break-word !important;
-    box-sizing: border-box !important;
-    padding-bottom: 8px !important;
-  }
-
-  .flex-shrink-0 {
-    flex-shrink: 0 !important;
-  }
-
-  form.flex-grow {
-    min-width: 0;
-  }
-
-  /* Base styles for the textarea */
-  .question-textarea {
-    transition: height 0.2s ease-out !important;
-    min-height: 42px !important;
-    box-sizing: border-box !important;
-  }
-
-  /* Desktop styles */
-  @media (min-width: 768px) {
-    .question-textarea {
-      max-height: 100px !important;
-      overflow-y: auto !important;
-      scrollbar-width: thin !important;
-      scrollbar-color: rgba(0, 0, 0, 0.2) transparent !important;
-    }
-
-    .question-textarea::-webkit-scrollbar {
-      width: 6px !important;
-    }
-
-    .question-textarea::-webkit-scrollbar-track {
-      background: transparent !important;
-    }
-
-    .question-textarea::-webkit-scrollbar-thumb {
-      background-color: rgba(0, 0, 0, 0.2) !important;
-      border-radius: 3px !important;
-    }
-  }
-
-  /* Mobile styles */
-  @media (max-width: 767px) {
-    .question-textarea {
-      max-height: 200px !important;
-      overflow-y: auto !important;
-    }
-    
-    .question-textarea::-webkit-scrollbar {
-      width: 0px !important;
-      background: transparent !important;
-    }
-  }
-
-  /* Common styles */
-  .auto-expand-textarea {
-    font-family: inherit !important;
-    font-size: inherit !important;
-    line-height: 1.5 !important;
-    padding: 10px !important;
-  }
-
-  textarea {
-    font-family: inherit;
-    font-size: inherit;
-    line-height: 1.5;
-    white-space: pre-wrap !important;
-    overflow-wrap: break-word !important;
-    word-wrap: break-word !important;
-    box-sizing: border-box !important;
-  }
-
-  .flex-shrink-0 {
-    flex-shrink: 0 !important;
-  }
-
-  form.flex-grow {
-    min-width: 0;
-  }
-
-  /* Custom scrollbar styles */
-  .custom-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(203, 213, 225, 0.4) transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar {
-    height: 6px;
-    width: 6px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: rgba(203, 213, 225, 0.4);
-    border-radius: 3px;
-  }
-
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(203, 213, 225, 0.6);
-  }
-
-  /* Enable touch-based scrolling on mobile */
-  @media (hover: none) {
-    .custom-scrollbar {
-      -webkit-overflow-scrolling: touch;
-    }
-  }
-
-  /* Enable mouse drag scrolling on desktop */
-  .custom-scrollbar {
-    cursor: grab;
-    user-select: none;
-  }
-
-  .custom-scrollbar:active {
-    cursor: grabbing;
-  }
-
-  /* Remove or update these cursor styles */
-  .custom-scrollbar {
-    /* Remove the grab cursor */
-    cursor: default !important; /* Forces default arrow cursor */
-    user-select: none;
-  }
-
-  .custom-scrollbar:active {
-    /* Remove the grabbing cursor */
-    cursor: default !important;
-  }
-
-  /* Add specific cursor styles only for clickable elements */
-  button, 
-  a, 
-  .clickable {
-    cursor: pointer;
-  }
-
-  /* Force default cursor for all other elements */
-  * {
-    cursor: default;
-  }
-
-  /* Adjust header and footer styles */
-  .header {
-    height: 50px; /* Reduce height */
-    padding: 10px 20px; /* Adjust padding */
-  }
-
-  .footer {
-    height: 50px; /* Reduce height */
-    padding: 10px 20px; /* Adjust padding */
-  }
-
-  /* Ensure content area uses available space */
-  .content {
-    padding-top: 60px; /* Adjust to match header height */
-    padding-bottom: 60px; /* Adjust to match footer height */
-    overflow-y: auto; /* Allow scrolling if needed */
-  }
 `;
 
 // Add the styles to the document
@@ -1483,4 +1305,3 @@ const getStartTime = (timestamp) => {
   const [minutes, seconds] = timestamp.split(':').map(Number);
   return minutes * 60 + seconds;
 };
-
