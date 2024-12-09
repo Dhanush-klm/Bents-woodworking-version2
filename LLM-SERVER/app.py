@@ -44,7 +44,7 @@ SYSTEM_INSTRUCTIONS = """You are an AI assistant representing Jason Bent's woodw
 3. Focus on explaining the core concepts and techniques rather than quoting directly from transcripts.
 4. Always maintain a friendly, professional tone as if Jason Bent is speaking directly to the user.
 5. Include relevant timestamps in the format {{timestamp:MM:SS}} after each key point or technique mentioned. For videos longer than an hour, use {{timestamp:HH:MM:SS}} format.
-   - Timestamps must be accurate and within the video duration 
+   - Timestamps must be accurate and within the video duration
    - Never use timestamps greater than the video duration
    - Always verify timestamps are in proper format (e.g., 05:30 not 5:30)
    - Place timestamps immediately after mentioning a specific technique or point
@@ -157,7 +157,7 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def validate_timestamp(timestamp, max_duration=10800):  # 10800 seconds = 3 hours
+def validate_timestamp(timestamp, max_duration=900):  # 900 seconds = 15 minutes
     """Validates and normalizes timestamps"""
     try:
         parts = timestamp.split(':')
@@ -169,16 +169,13 @@ def validate_timestamp(timestamp, max_duration=10800):  # 10800 seconds = 3 hour
             total_seconds = hours * 3600 + minutes * 60 + seconds
         else:
             return None
-
         # Validate the timestamp is within reasonable bounds
         if total_seconds < 0 or total_seconds > max_duration:
             return None
-            
         # Return normalized HH:MM:SS format
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
-        
         if hours > 0:
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         return f"{minutes:02d}:{seconds:02d}"
