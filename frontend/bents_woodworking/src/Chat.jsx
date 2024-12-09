@@ -654,44 +654,50 @@ export default function Chat({ isVisible }) {
     
     let formattedText = text;
 
-    // Step 1: Clean up the text
+    // Step 1: Clean up the text and remove all unwanted characters
     formattedText = formattedText
       .replace(/\r\n/g, '\n')
       .replace(/###/g, '')
+      // Remove all numbering patterns
+      .replace(/^\d+\.\s*/gm, '') // Numbers at start of lines
+      .replace(/\s*\d+\.\s*(?=\*\*|$)/g, ' ') // Numbers before bold or end of line
+      .replace(/(\w)\s*\d+\s*(?=\n|$)/g, '$1') // Numbers at end of sentences
+      // Remove all colons
+      .replace(/\*\*([^*]+)\*\*\s*:/g, '**$1**') // Colons after bold text
+      .replace(/:\s*(?=\n|$)/g, '') // Colons at line ends
+      .replace(/\s*:\s*/g, ' ') // Any remaining colons
+      // Remove all hyphen patterns
+      .replace(/^\s*[-–—]+\s*$/gm, '') // Standalone hyphens
+      .replace(/\n[-–—]+\n/g, '\n') // Lines with only hyphens
+      .replace(/[-–—]{2,}/g, '') // Multiple hyphens
+      .replace(/(?:^|\n)\s*[-–—]\s*(?=\n|$)/g, '\n') // Single hyphens at line starts/ends
+      // Clean up extra spaces and line breaks
       .replace(/^\s+|\s+$/gm, '')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
-    // Step 2: Remove numbers, colons, and dashes (except for bullet points)
-    formattedText = formattedText
-      .replace(/(?:^|\n\n)\s*\d+\.\s*(\*\*[^*]+\*\*)/g, '\n\n$1') // Remove numbers before bold text
-      .replace(/([^*]+)\s*\d+\.\s*(\*\*)/g, '$1$2') // Remove numbers at end of sentences before bold
-      .replace(/\d+\.\s*$/gm, '') // Remove trailing numbers
-      .replace(/\*\*([^*]+)\*\*\s*:/g, '**$1**') // Remove colons after bold text
-      .replace(/:\s*(?=\n|$)/g, '') // Remove colons at line ends
-      .replace(/(?<=[a-zA-Z])\s*[-–—]\s*(?=[a-zA-Z])/g, ' ') // Remove mid-sentence dashes
-      .replace(/\s+/g, ' '); // Clean up extra spaces
-
-    // Step 3: Handle main bold text
+    // Step 2: Handle main bold text
     formattedText = formattedText.replace(
       /(?:^|\n\n)\s*\*\*([^*]+)\*\*(?:\s*\n)?/g,
       (match, content) => `\n\n<strong class="font-bold inline-block text-gray-900 mb-2">${content.trim()}</strong>\n`
     );
 
-    // Rest of the function remains exactly the same
+    // Step 3: Handle sub-sections
     formattedText = formattedText.replace(
       /\*\*([^*]+)\*\*/g,
       (match, content) => `<strong class="font-semibold text-gray-800 block mb-1">${content.trim()}</strong>`
     );
 
-    // Updated list item handling to ensure consistent bullet points
+    // Step 4: Convert list items to paragraphs (without bullets)
     formattedText = formattedText
       .replace(/(?:^|\n)[-–—]\s+([^\n]+)/g, (match, content) => 
-        `\n<div class="list-item flex items-start gap-2 my-1">
-          <span class="text-gray-400 mt-1">•</span>
+        `\n<div class="list-item my-1">
           <span class="text-gray-600">${content.trim()}</span>
         </div>`
-      )
+      );
+
+    // Step 5: Final cleanup
+    formattedText = formattedText
       .replace(/\*([^*]+)\*/g, '$1')
       .replace(/>\s+</g, '><')
       .replace(/\n\n+/g, '\n\n')
