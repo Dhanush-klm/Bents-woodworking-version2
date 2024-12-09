@@ -225,20 +225,7 @@ def process_answer(answer, urls, source_documents):
     processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
     processed_answer = re.sub(r'\[?video\s*\d+\]?', '', processed_answer, flags=re.IGNORECASE)
     
-    # Clean up formatting
-    processed_answer = re.sub(r'"\s*$', '"', processed_answer)  # Clean up trailing spaces before quotes
-    processed_answer = re.sub(r'\s+', ' ', processed_answer)  # Clean up multiple spaces
-    processed_answer = re.sub(r'\s*\n\s*', '\n', processed_answer)  # Clean up newlines
-    processed_answer = re.sub(r'\n{3,}', '\n\n', processed_answer)  # Reduce multiple newlines
-    
-    # Format numbered lists properly
-    processed_answer = re.sub(r'(\d+)\.\s*', r'\n\1. ', processed_answer)
-    
-    # Ensure proper spacing after periods
-    processed_answer = re.sub(r'\.(?=\S)', '. ', processed_answer)
-    
-    # Clean up any remaining whitespace issues
-    processed_answer = processed_answer.strip()
+  
     
     return processed_answer, video_dict
 
