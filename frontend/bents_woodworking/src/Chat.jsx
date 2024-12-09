@@ -654,42 +654,50 @@ export default function Chat({ isVisible }) {
     
     let formattedText = text;
 
-    // Initial cleanup
+    // Step 1: Clean up the text
     formattedText = formattedText
-      .replace(/\r\n/g, '\n')                    // Normalize line breaks
-      .replace(/###/g, '')                       // Remove ### symbols completely
-      .replace(/^\s+|\s+$/gm, '')                // Remove leading/trailing whitespace
-      .replace(/([^:]+):\s*/g, '$1\n')           // Replace colon with newline for context
-      .replace(/^\d+[\.\)]?\s*/gm, '')           // Remove numbers
-      .replace(/^[-–]\s*/gm, '')                 // Remove hyphens at start of lines
-      .trim();                                   // Trim the entire text
-
-    // Add numbering to main bold headings with full bold (font-bold)
-    let boldCounter = 1;
-    formattedText = formattedText.replace(
-      /(?:^|\n\n)\s*\*\*(.*?)\*\*\s*\n*/g,
-      (match, content) => `\n\n<strong class="font-bold block mb-0">${boldCounter++}. ${content.trim()}</strong>\n`
-    );
-
-    // Handle remaining headings with semi-bold and italic
-    formattedText = formattedText.replace(
-      /\*\*(.*?)\*\*\s*\n*/g,
-      (match, content) => `<strong class="font-semibold italic block mb-0">${content.trim()}</strong>`
-    );
-
-    // Final cleanup
-    formattedText = formattedText
+      .replace(/\r\n/g, '\n')
+      .replace(/###/g, '')
+      .replace(/^\s+|\s+$/gm, '')
       .replace(/\n{3,}/g, '\n\n')
-      .replace(/\s*\n\s*/g, '\n')
+      .trim();
+
+    // Step 2: Remove any numbering before bold text
+    formattedText = formattedText.replace(
+      /(?:^|\n\n)\s*\d+\.\s*(\*\*[^*]+\*\*)/g,
+      '\n\n$1'
+    );
+
+    // Step 3: Handle main bold text
+    formattedText = formattedText.replace(
+      /(?:^|\n\n)\s*\*\*([^*]+)\*\*(?:\s*\n)?/g,
+      (match, content) => `\n\n<strong class="font-bold inline-block text-gray-900 mb-2">${content.trim()}</strong>\n`
+    );
+
+    // Rest of the function remains exactly the same
+    formattedText = formattedText.replace(
+      /\*\*([^*]+)\*\*/g,
+      (match, content) => `<strong class="font-semibold text-gray-800 block mb-1">${content.trim()}</strong>`
+    );
+
+    formattedText = formattedText
+      .replace(/(?:^|\n)[-–]\s+([^\n]+)/g, (match, content) => 
+        `\n<div class="list-item flex items-start gap-2 my-1">
+          <span class="text-gray-400 mt-1">•</span>
+          <span class="text-gray-600">${content.trim()}</span>
+        </div>`
+      )
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/>\s+</g, '><')
+      .replace(/\n\n+/g, '\n\n')
       .replace(/\*\*\*\*timestamp\*\*\*\*/g, '')
       .replace(/:\s*\n/g, '\n')
-      .replace(/(?<=<\/strong>)\s*[-–]\s*/g, '')
       .trim();
 
     return (
       <div 
         dangerouslySetInnerHTML={{ __html: formattedText }}
-        className="prose prose-slate max-w-none break-words whitespace-pre-line"
+        className="prose prose-slate max-w-none break-words whitespace-pre-line space-y-2"
         style={{
           width: '100%',
           maxWidth: '100%',
