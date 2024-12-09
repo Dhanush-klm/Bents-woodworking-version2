@@ -35,7 +35,7 @@ class LLMNoResponseError(LLMResponseError):
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002","https://bents-frontend-server.vercel.app","https://bents-backend-server.vercel.app"]}})
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002"]}})
 
 # System instructions
 SYSTEM_INSTRUCTIONS = """You are an AI assistant representing Jason Bent's woodworking expertise. Your role is to:
@@ -43,7 +43,11 @@ SYSTEM_INSTRUCTIONS = """You are an AI assistant representing Jason Bent's woodw
 2. Convert technical content into conversational, easy-to-understand explanations.
 3. Focus on explaining the core concepts and techniques rather than quoting directly from transcripts.
 4. Always maintain a friendly, professional tone as if Jason Bent is speaking directly to the user.
-5. Include relevant timestamps in the format {{timestamp:HH:MM:SS}} after each key point or technique mentioned.
+5. Include relevant timestamps in the format {{timestamp:MM:SS}} after each key point or technique mentioned. For videos longer than an hour, use {{timestamp:HH:MM:SS}} format.
+   - Timestamps must be accurate and within the video duration 
+   - Never use timestamps greater than the video duration
+   - Always verify timestamps are in proper format (e.g., 05:30 not 5:30)
+   - Place timestamps immediately after mentioning a specific technique or point
 6. Organize multi-part responses clearly with natural transitions.
 7. Keep responses concise and focused on the specific question asked.
 8. If information isn't available in the provided context, clearly state that.
@@ -56,7 +60,9 @@ Remember:
 - Focus on analyzing the transcripts and explaining the concepts naturally rather than quoting transcripts
 - Must provide a timestamp or location reference for where the information was found in the original document.
 - Keep responses clear, practical, and focused on woodworking expertise
-- If users ask about video details provide the video timestamp in the format {{timestamp:HH:MM:SS}}
+- If users ask about video details provide the video timestamp in the format {{timestamp:MM:SS}} or {{timestamp:HH:MM:SS}} for longer videos
+- Timestamps must be properly formatted with leading zeros (e.g., 05:30 not 5:30)
+- Never provide timestamps that exceed the video duration
 """
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
@@ -151,99 +157,109 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def process_answer(answer, urls, source_documents):
-    def extract_context(text, timestamp_pos, window=150):
-        start = max(0, timestamp_pos - window)
-        end = min(len(text), timestamp_pos + window)
-        return text[start:end].strip()
+def validate_timestamp(timestamp, max_duration=10800):  # 10800 seconds = 3 hours
+    """Validates and normalizes timestamps"""
+    try:
+        parts = timestamp.split(':')
+        if len(parts) == 2:  # MM:SS format
+            minutes, seconds = map(int, parts)
+            total_seconds = minutes * 60 + seconds
+        elif len(parts) == 3:  # HH:MM:SS format
+            hours, minutes, seconds = map(int, parts)
+            total_seconds = hours * 3600 + minutes * 60 + seconds
+        else:
+            return None
 
-    def generate_description(context, timestamp):
-        description_prompt = f"""
-        Given this woodworking video context at {timestamp}, create an extremely concise action phrase (max 6-8 words).
-
-        Context: {context}
-
-        Rules:
-        1. Start with an action verb
-        2. Name the specific tool/technique
-        3. Must be 6-8 words only
-        4. Focus on the single main action
-        5. Be direct and clear
-
-        Example formats:
-        - "Demonstrates table saw fence alignment technique"
-        - "Installs dust collection system components"
-        - "Shows track saw cutting method"
-
-        Description:"""
-
-        try:
-            enhanced_description = llm.predict(description_prompt).strip()
-            words = enhanced_description.split()[:8]
-            return ' '.join(words)
-        except Exception as e:
-            logging.error(f"Error generating description: {str(e)}")
-            return ' '.join(context.split()[:6])
-
-    def process_timestamp(match, source_index, source_documents):
-        timestamp = match.group(1)
-        timestamp_pos = match.start()
-        context = extract_context(answer, timestamp_pos)
+        # Validate the timestamp is within reasonable bounds
+        if total_seconds < 0 or total_seconds > max_duration:
+            return None
+            
+        # Return normalized HH:MM:SS format
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
         
-        current_url = urls[source_index] if source_index < len(urls) else None
-        current_metadata = source_documents[source_index].metadata if source_index < len(source_documents) else {}
-        current_title = current_metadata.get('title', "Unknown Video")
-        
-        enhanced_description = generate_description(context, timestamp)
-        
-        full_urls = [combine_url_and_timestamp(current_url, timestamp)] if current_url else []
-        
-        return {
-            'links': full_urls,
-            'timestamp': timestamp,
-            'description': enhanced_description,
-            'video_title': current_title
-        }
+        if hours > 0:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return f"{minutes:02d}:{seconds:02d}"
+    except:
+        return None
+
+def extract_context(text, position, window=100):
+    """Extract context around a specific position in text"""
+    start = max(0, position - window)
+    end = min(len(text), position + window)
+    return text[start:end].strip()
+
+def generate_description(context, timestamp):
+    """Generate a description based on the context and timestamp"""
+    # Remove existing timestamps and clean up the text
+    cleaned_context = re.sub(r'\{timestamp:[^\}]+\}', '', context)
+    cleaned_context = re.sub(r'\s+', ' ', cleaned_context).strip()
     
-    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
-    timestamps_info = [
-        process_timestamp(match, i, source_documents) 
-        for i, match in enumerate(timestamp_matches)
-    ]
+    # Limit description length
+    max_length = 150
+    if len(cleaned_context) > max_length:
+        cleaned_context = cleaned_context[:max_length] + '...'
     
-    video_dict = {
-        str(i): {
-            'urls': entry['links'],
-            'timestamp': entry['timestamp'],
-            'description': entry['description'],
-            'video_title': entry['video_title']
-        }
-        for i, entry in enumerate(timestamps_info)
+    return cleaned_context
+
+def process_timestamp(match, source_index, source_documents):
+    timestamp = match.group(1)
+    timestamp_pos = match.start()
+    
+    # Get the full text from the source document
+    source_text = source_documents[source_index].page_content if source_index < len(source_documents) else ""
+    context = extract_context(source_text, timestamp_pos)
+    
+    current_metadata = source_documents[source_index].metadata if source_index < len(source_documents) else {}
+    current_url = current_metadata.get('url', None)
+    current_title = current_metadata.get('title', "Unknown Video")
+    
+    # Validate timestamp
+    validated_timestamp = validate_timestamp(timestamp)
+    if not validated_timestamp:
+        logging.warning(f"Invalid timestamp detected: {timestamp}")
+        return None
+        
+    enhanced_description = generate_description(context, validated_timestamp)
+    
+    full_urls = [combine_url_and_timestamp(current_url, validated_timestamp)] if current_url else []
+    
+    return {
+        'links': full_urls,
+        'timestamp': validated_timestamp,
+        'description': enhanced_description,
+        'video_title': current_title
     }
-    
-    # Remove all timestamp references and any "Video X" references
-    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
-    processed_answer = re.sub(r'\[?video\s*\d+\]?', '', processed_answer, flags=re.IGNORECASE)
-    
-   
-    
-    return processed_answer, video_dict
 
 def combine_url_and_timestamp(base_url, timestamp):
-    parts = timestamp.split(':')
-    if len(parts) == 2:
-        minutes, seconds = map(int, parts)
-        total_seconds = minutes * 60 + seconds
-    elif len(parts) == 3:
-        hours, minutes, seconds = map(int, parts)
-        total_seconds = hours * 3600 + minutes * 60 + seconds
-    else:
-        raise ValueError("Invalid timestamp format")
-
-    if '?' in base_url:
-        return f"{base_url}&t={total_seconds}"
-    else:
-        return f"{base_url}?t={total_seconds}"
+    if not base_url:
+        return None
+        
+    try:
+        parts = timestamp.split(':')
+        total_seconds = 0
+        
+        if len(parts) == 2:  # MM:SS
+            minutes, seconds = map(int, parts)
+            total_seconds = minutes * 60 + seconds
+        elif len(parts) == 3:  # HH:MM:SS
+            hours, minutes, seconds = map(int, parts)
+            total_seconds = hours * 3600 + minutes * 60 + seconds
+            
+        # Ensure the timestamp is valid
+        if total_seconds < 0:
+            logging.error(f"Invalid negative timestamp: {timestamp}")
+            return base_url
+            
+        # Add timestamp parameter to URL
+        separator = '&' if '?' in base_url else '?'
+        return f"{base_url}{separator}t={total_seconds}"
+        
+    except Exception as e:
+        logging.error(f"Error processing timestamp {timestamp}: {str(e)}")
+        return base_url
 
 def extract_text_from_docx(file):
     doc = Document(file)
@@ -423,6 +439,36 @@ def get_all_related_products(video_dict):
     
     return all_products
 
+def process_answer(answer_text, source_documents):
+    """Process the LLM answer to extract timestamps and generate video links"""
+    timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer_text))
+    timestamps_info = []
+    
+    # Extract URLs from source documents
+    urls = [doc.metadata.get('url', '') for doc in source_documents]
+    
+    for i, match in enumerate(timestamp_matches):
+        info = process_timestamp(match, i, source_documents)
+        if info:  # Only add valid timestamps
+            timestamps_info.append(info)
+    
+    video_dict = {
+        str(i): {
+            'urls': entry['links'],
+            'timestamp': entry['timestamp'],
+            'description': entry['description'],
+            'video_title': entry['video_title']
+        }
+        for i, entry in enumerate(timestamps_info)
+    }
+    
+    # Clean up the answer text
+    processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer_text)
+    processed_answer = re.sub(r'\[?video\s*\d+\]?', '', processed_answer, flags=re.IGNORECASE)
+   
+    
+    return processed_answer, video_dict
+
 @app.route('/')
 @app.route('/database')
 def serve_spa():
@@ -548,23 +594,15 @@ def chat():
         raw_answer = result['answer']  # Store the raw answer before processing
         source_documents = result['source_documents']
         
-        # Process source documents
-        urls = []
-        contexts = []
-        for doc in source_documents:
-            if 'url' in doc.metadata:
-                urls.append(doc.metadata['url'])
-            contexts.append(doc.page_content)
-        
         # Process the answer to get video dictionary
-        processed_answer, video_dict = process_answer(raw_answer, urls, source_documents)
+        processed_answer, video_dict = process_answer(raw_answer, source_documents)
         
         response_data = {
             'response': processed_answer,
-            'raw_response': raw_answer,  # Include the raw LLM response
+            'raw_response': raw_answer,
             'video_links': video_dict,
             'related_products': get_all_related_products(video_dict),
-            'urls': urls
+            'urls': [doc.metadata.get('url', '') for doc in source_documents]
         }
         
         return jsonify(response_data)
