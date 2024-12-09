@@ -157,7 +157,7 @@ def verify_database():
         logging.error(f"Database verification failed: {str(e)}", exc_info=True)
         return False
 
-def validate_timestamp(timestamp, max_duration=900):  # 900 seconds = 15 minutes
+def validate_timestamp(timestamp, max_duration=10800):  # 10800 seconds = 3 hours
     """Validates and normalizes timestamps"""
     try:
         parts = timestamp.split(':')
@@ -169,19 +169,21 @@ def validate_timestamp(timestamp, max_duration=900):  # 900 seconds = 15 minutes
             total_seconds = hours * 3600 + minutes * 60 + seconds
         else:
             return None
+
         # Validate the timestamp is within reasonable bounds
         if total_seconds < 0 or total_seconds > max_duration:
             return None
+            
         # Return normalized HH:MM:SS format
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
+        
         if hours > 0:
             return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         return f"{minutes:02d}:{seconds:02d}"
     except:
         return None
-
 def extract_context(text, position, window=100):
     """Extract context around a specific position in text"""
     start = max(0, position - window)
