@@ -662,11 +662,12 @@ export default function Chat({ isVisible }) {
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
-    // Step 2: Remove any numbering before bold text
-    formattedText = formattedText.replace(
-      /(?:^|\n\n)\s*\d+\.\s*(\*\*[^*]+\*\*)/g,
-      '\n\n$1'
-    );
+    // Step 2: Remove all numbering patterns
+    formattedText = formattedText
+      .replace(/(?:^|\n\n)\s*\d+\.\s*(\*\*[^*]+\*\*)/g, '\n\n$1') // Remove numbers before bold text
+      .replace(/([^*]+)\s*\d+\.\s*(\*\*)/g, '$1$2') // Remove numbers at end of sentences before bold
+      .replace(/\d+\.\s*$/gm, '') // Remove trailing numbers
+      .replace(/:\s*\d+\s*(?=\n|$)/g, ':'); // Remove numbers after colons
 
     // Step 3: Handle main bold text
     formattedText = formattedText.replace(
