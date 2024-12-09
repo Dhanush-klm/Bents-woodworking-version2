@@ -662,13 +662,15 @@ export default function Chat({ isVisible }) {
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
-    // Step 2: Remove numbers and colons
+    // Step 2: Remove numbers, colons, and dashes (except for bullet points)
     formattedText = formattedText
       .replace(/(?:^|\n\n)\s*\d+\.\s*(\*\*[^*]+\*\*)/g, '\n\n$1') // Remove numbers before bold text
       .replace(/([^*]+)\s*\d+\.\s*(\*\*)/g, '$1$2') // Remove numbers at end of sentences before bold
       .replace(/\d+\.\s*$/gm, '') // Remove trailing numbers
       .replace(/\*\*([^*]+)\*\*\s*:/g, '**$1**') // Remove colons after bold text
-      .replace(/:\s*(?=\n|$)/g, ''); // Remove colons at line ends
+      .replace(/:\s*(?=\n|$)/g, '') // Remove colons at line ends
+      .replace(/(?<=[a-zA-Z])\s*[-–—]\s*(?=[a-zA-Z])/g, ' ') // Remove mid-sentence dashes
+      .replace(/\s+/g, ' '); // Clean up extra spaces
 
     // Step 3: Handle main bold text
     formattedText = formattedText.replace(
@@ -682,8 +684,9 @@ export default function Chat({ isVisible }) {
       (match, content) => `<strong class="font-semibold text-gray-800 block mb-1">${content.trim()}</strong>`
     );
 
+    // Updated list item handling to ensure consistent bullet points
     formattedText = formattedText
-      .replace(/(?:^|\n)[-–]\s+([^\n]+)/g, (match, content) => 
+      .replace(/(?:^|\n)[-–—]\s+([^\n]+)/g, (match, content) => 
         `\n<div class="list-item flex items-start gap-2 my-1">
           <span class="text-gray-400 mt-1">•</span>
           <span class="text-gray-600">${content.trim()}</span>
