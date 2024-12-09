@@ -35,7 +35,7 @@ class LLMNoResponseError(LLMResponseError):
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002"]}})
+CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:5002","https://bents-frontend-server.vercel.app","https://bents-backend-server.vercel.app"]}})
 
 # System instructions
 SYSTEM_INSTRUCTIONS = """You are an AI assistant representing Jason Bent's woodworking expertise. Your role is to:
