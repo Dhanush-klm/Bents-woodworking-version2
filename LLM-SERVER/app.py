@@ -61,8 +61,7 @@ Remember:
 - Must provide a timestamp or location reference for where the information was found in the original document.
 - Keep responses clear, practical, and focused on woodworking expertise
 - If users ask about video details provide the video timestamp in the format {{timestamp:MM:SS}} or {{timestamp:HH:MM:SS}} for longer videos
-- Timestamps must be properly formatted with leading zeros (e.g., 05:30 not 5:30)
-- Never provide timestamps that exceed the video duration
+
 """
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
