@@ -817,26 +817,22 @@ export default function Chat({ isVisible }) {
     return result;
   };
 
-  // Update the formatResponse function to handle the specific structure
+  // Update the formatResponse function
   const formatResponse = (text) => {
     if (!text) return null;
 
     // Apply markdown transformations based on the structure
     let formattedText = text
-      // Format numbered titles with bold text and colon (e.g., "### 1. **Main Point Title**:")
-      .replace(/###\s*(\d+)\.\s*\*\*(.*?)\*\*\s*:/g, (_, number, title) => 
-        `\n${number}. **${title}:**`
-      )
-      // Remove colons from the text
-    .replace(/:/g, '')
-      // Format numbered titles without colon as fallback
+      // Only format numbered titles with bold text
       .replace(/###\s*(\d+)\.\s*\*\*(.*?)\*\*/g, (_, number, title) => 
-        `\n${number}. **${title}**`
+        `\n### ${number}. **${title}**\n`
       )
-      // Remove hyphens and keep the content on the same line
-      .replace(/^\s*-\s+/gm, '')
-      // Remove any remaining ### markers
-      .replace(/###/g, '')
+      // Remove any other bold formatting in the content
+      .replace(/(?<!###\s*\d+\.\s*)\*\*(.*?)\*\*/g, '$1')
+      // Ensure bullet points stay on one line
+      .replace(/^\s*-\s+(.*?)$/gm, (match, content) => 
+        `- ${content.replace(/\n\s+/g, ' ')}`
+      )
       // Remove extra whitespace and newlines
       .replace(/\n\s*\n\s*\n/g, '\n\n')
       .trim();
@@ -847,8 +843,8 @@ export default function Chat({ isVisible }) {
           components={{
             p: ({node, ...props}) => {
               const text = props.children[0];
-              // Check if the paragraph starts with a number followed by a bold text (with or without colon)
-              if (typeof text === 'string' && /^\d+\.\s*\*\*.*?\*\*:?/.test(text)) {
+              // Only apply special formatting to section headers
+              if (typeof text === 'string' && /^###\s*\d+\.\s*\*\*.*?\*\*/.test(text)) {
                 return (
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold text-gray-900">
@@ -863,11 +859,19 @@ export default function Chat({ isVisible }) {
                 </p>
               );
             },
-            strong: ({node, ...props}) => (
-              <strong className="font-semibold text-gray-900">
-                {props.children}
-              </strong>
-            ),
+            strong: ({node, ...props}) => {
+              // Only apply bold to section headers
+              const parentText = node.parent?.value;
+              if (parentText && /^###\s*\d+\./.test(parentText)) {
+                return (
+                  <strong className="font-semibold text-gray-900">
+                    {props.children}
+                  </strong>
+                );
+              }
+              // Return regular text for non-header content
+              return <span>{props.children}</span>;
+            },
           }}
         >
           {formattedText}
