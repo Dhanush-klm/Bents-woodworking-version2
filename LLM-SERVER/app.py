@@ -538,21 +538,24 @@ def chat():
                 'video_links': {}
             })
         elif "NOT RELEVANT" in relevance_response.upper():
-            not_relevant_prompt = f"""
-            The following question is not directly related to woodworking or the assistant's expertise. However, please provide a message to the user for could you please rephrase your question.
+              not_relevant_prompt = f"""
+              The following question is not directly related to woodworking or the assistant's expertise. Provide a direct response that:
+              1. Politely acknowledges the question
+              2. Explains that you are specialized in woodworking and Jason Bent's content
+              3. Asks them to rephrase their question to relate to woodworking topics
+    
+              Question: {user_query}
 
-            Question: {user_query}
-
-            Response:
-            """
-            not_relevant_response = llm.predict(not_relevant_prompt)
-            return jsonify({
-                'response': not_relevant_response,
-                'related_products': [],
-                'urls': [],
-                'contexts': [],
-                'video_links': {}
-            })
+              Response (start directly with your message):
+              """
+              not_relevant_response = llm.predict(not_relevant_prompt)
+              return jsonify({
+                  'response': not_relevant_response.strip(),
+                  'related_products': [],
+                  'urls': [],
+                  'contexts': [],
+                  'video_links': {}
+    })
         # Only proceed with query rewriting if the query is relevant
         rewritten_query = rewrite_query(user_query, formatted_history)
         logging.debug(f"Query rewritten from '{user_query}' to '{rewritten_query}'")
