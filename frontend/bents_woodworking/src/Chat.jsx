@@ -8,8 +8,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { cn } from "@/lib/utils";
 // Update these imports to use relative paths
 import { Textarea } from "./components/ui/textarea";
+import ReactMarkdown from 'react-markdown';
 
-// Define all styles in one place at the top of the file
+// First, declare all style constants
 const baseStyles = `
   .hide-scrollbar {
     -ms-overflow-style: none;
@@ -200,13 +201,129 @@ const formattingStyles = `
   .section-header strong {
     font-weight: 600;
   }
+
+  .prose h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 1.5rem 0 1rem;
+    color: #1f2937;
+  }
+
+  .prose strong {
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .prose > div {
+    margin: 0.5rem 0;
+  }
+
+  .prose .bullet-point {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 0.25rem 0;
+  }
+
+  .prose .bullet-marker {
+    color: #9ca3af;
+    flex-shrink: 0;
+  }
+
+  .prose .numbered-point {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 0.25rem 0;
+  }
+
+  .prose .number-marker {
+    color: #9ca3af;
+    flex-shrink: 0;
+    min-width: 1.5rem;
+  }
 `;
 
-// Combine all styles
+const additionalStyles = `
+  .hide-scrollbar {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+  
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none !important;
+  }
+  
+  .question-textarea {
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    will-change: height;
+    transition: height 0.1s ease-out !important;
+  }
+  
+  @media (max-width: 640px) {
+    .question-textarea {
+      font-size: 16px !important;
+      min-height: 42px !important;
+      height: auto !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      resize: none !important;
+      line-height: 1.5 !important;
+      padding-top: 10px !important;
+      padding-bottom: 10px !important;
+      -webkit-text-size-adjust: 100%;
+      -webkit-overflow-scrolling: touch !important;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+
+    .question-textarea::-webkit-scrollbar {
+      display: none !important;
+    }
+    
+    /* Add smooth expansion animation */
+    .question-textarea {
+      transition: height 0.2s ease-out !important;
+    }
+    
+    /* Ensure proper touch handling */
+    .question-textarea {
+      touch-action: pan-y pinch-zoom !important;
+    }
+    
+    /* Prevent unwanted zoom on iOS */
+    .question-textarea {
+      max-height: 50vh !important;
+    }
+  }
+`;
+
+const bottomBarStyles = `
+  @media (max-width: 640px) {
+    .fixed.bottom-0 {
+      position: sticky !important;
+      bottom: 0 !important;
+      background: white !important;
+      z-index: 50 !important;
+      padding-bottom: env(safe-area-inset-bottom) !important;
+    }
+    
+    .fixed.bottom-0 form {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+  }
+`;
+
+// Single declaration of combinedStyles
 const combinedStyles = `
   ${baseStyles}
   ${watermarkStyles}
   ${formattingStyles}
+  ${additionalStyles}
+  ${bottomBarStyles}
 `;
 
 // Create and inject styles
@@ -648,73 +765,114 @@ export default function Chat({ isVisible }) {
     return null;
   };
 
-  // Update the formatResponse function
-  const formatResponse = (text, videoLinks) => {
-    if (!text) return null;
+  // Add the new formatText function
+  const formatText = (inputText) => {
+    if (!inputText) return '';
     
-    let formattedText = text;
+    const lines = inputText.trim().split('\n');
+    const formattedLines = [];
+    let currentSection = null;
 
-    // Step 1: Clean up the text and remove all unwanted characters
-    formattedText = formattedText
-      .replace(/\r\n/g, '\n')
+    lines.forEach(line => {
+      line = line.trim();
+
+      // Skip empty lines or single hyphens
+      if (line === '-' || line === '') {
+        return;
+      }
+
+      // Handle main titles (no hyphen prefix)
+      if (!line.startsWith('-') && !line.startsWith(':') && !['purpose', 'features', 'application'].some(keyword => line.toLowerCase().includes(keyword))) {
+        formattedLines.push(`\n**${line}**\n`);
+        return;
+      }
+
+      // Handle section headers with content
+      if (['purpose', 'features', 'application'].some(keyword => line.toLowerCase().includes(keyword))) {
+        currentSection = line;
+        if (line.includes(':')) {
+          const [title, content] = line.split(':', 2);
+          formattedLines.push(`- **${title}**: ${content.trim()}`);
+        } else {
+          formattedLines.push(`- **${currentSection}**`);
+        }
+        return;
+      }
+
+      // Handle content lines
+      if (line.startsWith(':')) {
+        const content = line.slice(1).trim();
+        if (formattedLines.length > 0 && formattedLines[formattedLines.length - 1].endsWith(':')) {
+          formattedLines[formattedLines.length - 1] += ` ${content}`;
+        } else {
+          formattedLines.push(content);
+        }
+      }
+    });
+
+    let result = formattedLines.join('\n');
+    result = result.replace(/\s+/g, ' ');
+    result = result.replace(/\n\s+\n/g, '\n\n');
+
+    return result;
+  };
+
+  // Update the formatResponse function to handle the specific structure
+  const formatResponse = (text) => {
+    if (!text) return null;
+
+    // Apply markdown transformations based on the structure
+    let formattedText = text
+      // Format numbered titles with bold text and colon (e.g., "### 1. **Main Point Title**:")
+      .replace(/###\s*(\d+)\.\s*\*\*(.*?)\*\*\s*:/g, (_, number, title) => 
+        `\n${number}. **${title}:**`
+      )
+      // Remove colons from the text
+    .replace(/:/g, '')
+      // Format numbered titles without colon as fallback
+      .replace(/###\s*(\d+)\.\s*\*\*(.*?)\*\*/g, (_, number, title) => 
+        `\n${number}. **${title}**`
+      )
+      // Remove hyphens and keep the content on the same line
+      .replace(/^\s*-\s+/gm, '')
+      // Remove any remaining ### markers
       .replace(/###/g, '')
-      // Remove all numbering patterns
-      .replace(/^\d+\.\s*/gm, '') // Numbers at start of lines
-      .replace(/\s*\d+\.\s*(?=\*\*|$)/g, ' ') // Numbers before bold or end of line
-      .replace(/(\w)\s*\d+\s*(?=\n|$)/g, '$1') // Numbers at end of sentences
-      // Remove all colons
-      .replace(/\*\*([^*]+)\*\*\s*:/g, '**$1**') // Colons after bold text
-      .replace(/:\s*(?=\n|$)/g, '') // Colons at line ends
-      .replace(/\s*:\s*/g, ' ') // Any remaining colons
-      // Remove all hyphen patterns
-      .replace(/^\s*[-–—]+\s*$/gm, '') // Standalone hyphens
-      .replace(/\n[-–—]+\n/g, '\n') // Lines with only hyphens
-      .replace(/[-–—]{2,}/g, '') // Multiple hyphens
-      .replace(/(?:^|\n)\s*[-–—]\s*(?=\n|$)/g, '\n') // Single hyphens at line starts/ends
-      // Clean up extra spaces and line breaks
-      .replace(/^\s+|\s+$/gm, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-
-    // Step 2: Handle main bold text
-    formattedText = formattedText.replace(
-      /(?:^|\n\n)\s*\*\*([^*]+)\*\*(?:\s*\n)?/g,
-      (match, content) => `\n\n<strong class="font-bold inline-block text-gray-900 mb-2">${content.trim()}</strong>\n`
-    );
-
-    // Step 3: Handle sub-sections
-    formattedText = formattedText.replace(
-      /\*\*([^*]+)\*\*/g,
-      (match, content) => `<strong class="font-semibold text-gray-800 block mb-1">${content.trim()}</strong>`
-    );
-
-    // Step 4: Convert list items to paragraphs (without bullets)
-    formattedText = formattedText
-      .replace(/(?:^|\n)[-–—]\s+([^\n]+)/g, (match, content) => 
-        `\n<div class="list-item my-1">
-          <span class="text-gray-600">${content.trim()}</span>
-        </div>`
-      );
-
-    // Step 5: Final cleanup
-    formattedText = formattedText
-      .replace(/\*([^*]+)\*/g, '$1')
-      .replace(/>\s+</g, '><')
-      .replace(/\n\n+/g, '\n\n')
-      .replace(/\*\*\*\*timestamp\*\*\*\*/g, '')
+      // Remove extra whitespace and newlines
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
       .trim();
 
     return (
-      <div 
-        dangerouslySetInnerHTML={{ __html: formattedText }}
-        className="prose prose-slate max-w-none break-words whitespace-pre-line space-y-2"
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          overflowWrap: 'break-word',
-          wordBreak: 'break-word'
-        }}
-      />
+      <div className="prose prose-slate max-w-none">
+        <ReactMarkdown
+          components={{
+            p: ({node, ...props}) => {
+              const text = props.children[0];
+              // Check if the paragraph starts with a number followed by a bold text (with or without colon)
+              if (typeof text === 'string' && /^\d+\.\s*\*\*.*?\*\*:?/.test(text)) {
+                return (
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {props.children}
+                    </h3>
+                  </div>
+                );
+              }
+              return (
+                <p className="text-gray-700 mb-3 leading-relaxed">
+                  {props.children}
+                </p>
+              );
+            },
+            strong: ({node, ...props}) => (
+              <strong className="font-semibold text-gray-900">
+                {props.children}
+              </strong>
+            ),
+          }}
+        >
+          {formattedText}
+        </ReactMarkdown>
+      </div>
     );
   };
 
@@ -781,6 +939,7 @@ export default function Chat({ isVisible }) {
               "focus:placeholder:opacity-0",
               "resize-none",
               "question-textarea",
+              "hide-scrollbar",
               isLoading && currentConversation.length === 0 ? "opacity-50" : ""
             )}
             style={{
@@ -797,13 +956,15 @@ export default function Chat({ isVisible }) {
               whiteSpace: 'pre-wrap',
               overflowWrap: 'break-word',
               minHeight: '42px',
+              height: 'auto',
+              maxHeight: '300px',
+              overflow: 'hidden',
+              WebkitOverflowScrolling: 'touch',
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 handleSearch(e);
-              } else {
-                autoResizeTextarea(e.target);
               }
             }}
           />
@@ -1075,7 +1236,12 @@ export default function Chat({ isVisible }) {
 
     setVH();
     window.addEventListener('resize', setVH);
-    return () => window.removeEventListener('resize', setVH);
+    window.addEventListener('orientationchange', setVH);
+
+    return () => {
+      window.removeEventListener('resize', setVH);
+      window.removeEventListener('orientationchange', setVH);
+    };
   }, []);
 
   // Add these effects after your existing useEffects
@@ -1322,4 +1488,32 @@ const getStartTime = (timestamp) => {
   if (!timestamp) return 0;
   const [minutes, seconds] = timestamp.split(':').map(Number);
   return minutes * 60 + seconds;
+};
+
+// Update the autoResizeTextarea function to handle text content better
+const autoResizeTextarea = (textarea) => {
+  requestAnimationFrame(() => {
+    // Store the current scroll position
+    const scrollPos = textarea.scrollTop;
+    
+    // Reset height to auto
+    textarea.style.height = 'auto';
+    
+    // Calculate the new height
+    const scrollHeight = textarea.scrollHeight;
+    const maxHeight = window.innerWidth <= 640 ? Math.min(300, window.innerHeight * 0.5) : 300;
+    
+    if (scrollHeight > maxHeight) {
+      textarea.style.height = `${maxHeight}px`;
+      textarea.style.overflowY = 'auto';
+      // Restore scroll position
+      textarea.scrollTop = scrollPos;
+    } else {
+      textarea.style.height = `${scrollHeight}px`;
+      textarea.style.overflowY = 'hidden';
+    }
+    
+    // Force reflow for smooth transition
+    textarea.offsetHeight;
+  });
 };
