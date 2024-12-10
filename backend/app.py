@@ -43,20 +43,26 @@ SYSTEM_INSTRUCTIONS = """You are an AI assistant representing Jason Bent's woodw
 2. Convert technical content into conversational, easy-to-understand explanations.
 3. Focus on explaining the core concepts and techniques rather than quoting directly from transcripts.
 4. Always maintain a friendly, professional tone as if Jason Bent is speaking directly to the user.
-5. Include relevant timestamps in the format {{timestamp:HH:MM:SS}} after each key point or technique mentioned.
+5. For each key point or technique mentioned, include all three:
+   - Timestamp in the format {{timestamp:HH:MM:SS}}
+   - Video title in the format {{title:Video Title Here}}
+   - URL in the format {{url:https://youtube.com/watch?v=VIDEO_ID}}
 6. Organize multi-part responses clearly with natural transitions.
 7. Keep responses concise and focused on the specific question asked.
 8. If information isn't available in the provided context, clearly state that.
 9. Always respond in English, regardless of the input language.
 10. Avoid using phrases like "in the video" or "the transcript shows" - instead, speak directly about the techniques and concepts.
-11. Don't include URLs or raw timestamps in the explanation text.
+11. Don't include raw timestamps in the explanation text.
 12. Present information in a teaching style, focusing on the "how" and "why" of woodworking techniques.
+
+Example format for source citations:
+{{timestamp:05:30}}{{title:Workshop Tour 2024}}{{url:https://youtube.com/watch?v=abc123}}
+
 Remember:
 - You are speaking as Jason Bent's AI assistant and so if you are mentioning jason bent, you should use the word "Jason Bent" instead of "I" like "Jason Bent will suggest that you..."
 - Focus on analyzing the transcripts and explaining the concepts naturally rather than quoting transcripts
-- Must provide a timestamp or location reference for where the information was found in the original document.
+- Must provide timestamp, video title, and URL for each information source
 - Keep responses clear, practical, and focused on woodworking expertise
-- If users ask about video details provide the video timestamp in the format {{timestamp:HH:MM:SS}}
 """
 app.secret_key = os.urandom(24)  # Set a secret key for sessions
 
@@ -152,9 +158,9 @@ def verify_database():
         return False
 
 def process_answer(answer, urls, source_documents):
-    def extract_context(text, timestamp_pos, window=150):
-        start = max(0, timestamp_pos - window)
-        end = min(len(text), timestamp_pos + window)
+    def extract_context(text, marker_pos, window=150):
+        start = max(0, marker_pos - window)
+        end = min(len(text), marker_pos + window)
         return text[start:end].strip()
 
     def generate_description(context, timestamp):
@@ -185,31 +191,33 @@ def process_answer(answer, urls, source_documents):
             logging.error(f"Error generating description: {str(e)}")
             return ' '.join(context.split()[:6])
 
-    def process_timestamp(match, source_index, source_documents):
-        timestamp = match.group(1)
-        timestamp_pos = match.start()
+    def process_markers(timestamp_match, title_match, source_index):
+        timestamp = timestamp_match.group(1)
+        title = title_match.group(1)
+        url_match = re.search(r'\{url:([^\}]+)\}', answer[timestamp_match.start():])
+        url = url_match.group(1) if url_match else None
+        
+        timestamp_pos = timestamp_match.start()
         context = extract_context(answer, timestamp_pos)
-        
-        current_url = urls[source_index] if source_index < len(urls) else None
-        current_metadata = source_documents[source_index].metadata if source_index < len(source_documents) else {}
-        current_title = current_metadata.get('title', "Unknown Video")
-        
         enhanced_description = generate_description(context, timestamp)
         
-        full_urls = [combine_url_and_timestamp(current_url, timestamp)] if current_url else []
+        full_urls = [combine_url_and_timestamp(url, timestamp)] if url else []
         
         return {
             'links': full_urls,
             'timestamp': timestamp,
             'description': enhanced_description,
-            'video_title': current_title
+            'video_title': title
         }
     
+    # Find all timestamp and title markers
     timestamp_matches = list(re.finditer(r'\{timestamp:([^\}]+)\}', answer))
-    timestamps_info = [
-        process_timestamp(match, i, source_documents) 
-        for i, match in enumerate(timestamp_matches)
-    ]
+    title_matches = list(re.finditer(r'\{title:([^\}]+)\}', answer))
+    
+    # Ensure we have matching pairs
+    timestamps_info = []
+    for i, (ts_match, title_match) in enumerate(zip(timestamp_matches, title_matches)):
+        timestamps_info.append(process_markers(ts_match, title_match, i))
     
     video_dict = {
         str(i): {
@@ -221,24 +229,11 @@ def process_answer(answer, urls, source_documents):
         for i, entry in enumerate(timestamps_info)
     }
     
-    # Remove all timestamp references and any "Video X" references
+    # Clean up the answer text
     processed_answer = re.sub(r'\{timestamp:[^\}]+\}', '', answer)
+    processed_answer = re.sub(r'\{title:[^\}]+\}', '', processed_answer)
+    processed_answer = re.sub(r'\{url:[^\}]+\}', '', processed_answer)
     processed_answer = re.sub(r'\[?video\s*\d+\]?', '', processed_answer, flags=re.IGNORECASE)
-    
-    # Clean up formatting
-    processed_answer = re.sub(r'"\s*$', '"', processed_answer)  # Clean up trailing spaces before quotes
-    processed_answer = re.sub(r'\s+', ' ', processed_answer)  # Clean up multiple spaces
-    processed_answer = re.sub(r'\s*\n\s*', '\n', processed_answer)  # Clean up newlines
-    processed_answer = re.sub(r'\n{3,}', '\n\n', processed_answer)  # Reduce multiple newlines
-    
-    # Format numbered lists properly
-    processed_answer = re.sub(r'(\d+)\.\s*', r'\n\1. ', processed_answer)
-    
-    # Ensure proper spacing after periods
-    processed_answer = re.sub(r'\.(?=\S)', '. ', processed_answer)
-    
-    # Clean up any remaining whitespace issues
-    processed_answer = processed_answer.strip()
     
     return processed_answer, video_dict
 
