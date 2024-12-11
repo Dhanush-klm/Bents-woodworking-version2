@@ -303,16 +303,25 @@ const additionalStyles = `
 const bottomBarStyles = `
   @media (max-width: 640px) {
     .fixed.bottom-0 {
-      position: sticky !important;
+      position: fixed !important;
       bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
       background: white !important;
       z-index: 50 !important;
       padding-bottom: env(safe-area-inset-bottom) !important;
+      width: 100% !important;
+      border-top: 1px solid #e5e7eb !important;
     }
     
     .fixed.bottom-0 form {
       width: 100% !important;
       max-width: 100% !important;
+      padding: 8px !important;
+    }
+
+    .conversation-container {
+      padding-bottom: 120px !important;
     }
   }
 `;
@@ -1328,7 +1337,7 @@ export default function Chat({ isVisible }) {
     <div className="flex flex-col h-[calc(100vh-75px)] bg-white pt-[75px] watermark-background">
       {renderSidebar()}
       <div className="relative flex-grow overflow-hidden">
-        <div className="h-full overflow-y-auto p-4 pt-16 pb-24">
+        <div className="h-full overflow-y-auto p-4 pt-16 pb-24 sm:pb-24">
           <div ref={topOfConversationRef}></div>
           
           {/* Only show top search bar when no conversations exist */}
@@ -1395,7 +1404,7 @@ export default function Chat({ isVisible }) {
 
           {/* Fixed bottom search bar when conversations exist */}
           {currentConversation.length > 0 && (
-            <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-10"> {/* Added z-index */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-50">
               <div className="flex justify-center w-full px-4 py-4">
                 <div className="w-full max-w-xl">
                   {renderSearchBar()}
