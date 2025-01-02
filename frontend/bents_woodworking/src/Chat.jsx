@@ -518,88 +518,146 @@ export default function Chat({ isVisible }) {
     );
   };
 
-  // Restore the loading progress functionality in handleSearch
-  const handleSearch = async (e, index) => {
-    e.preventDefault();
-    const query = index !== undefined ? randomQuestions[index] : searchQuery;
-    if (!query.trim() || isSearching) return;
-    
-    setIsSearching(true);
-    setIsLoading(true);
-    setLoadingProgress(0);
-    if (index !== undefined) {
-      setLoadingQuestionIndex(index);
-      setSearchQuery(randomQuestions[index]);
-    }
-    setShowInitialQuestions(false);
 
-    // Fast progress for first three steps
-    const fastProgressInterval = setInterval(() => {
-      setLoadingProgress(prev => {
-        if (prev >= 75) {
-          clearInterval(fastProgressInterval);
-          return 75;
-        }
-        return prev + 5; // Faster increment for first three steps
-      });
-    }, 50); // Shorter interval for faster progress
 
-    try {
-      const response = await axios.post('https://bents-backend-server.vercel.app/chat', {
+// Update handleSearch function
+const handleSearch = async (e, index) => {
+  e.preventDefault();
+  const query = index !== undefined ? randomQuestions[index] : searchQuery;
+  if (!query.trim() || isSearching) return;
+  
+  setIsSearching(true);
+  setIsLoading(true);
+  setLoadingProgress(0);
+  if (index !== undefined) {
+    setLoadingQuestionIndex(index);
+    setSearchQuery(randomQuestions[index]);
+  }
+  setShowInitialQuestions(false);
+
+  // Initialize accumulator for streamed response
+  let accumulatedResponse = '';
+
+  try {
+    const response = await fetch('http://localhost:5002/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         message: query,
         selected_index: selectedIndex,
         chat_history: currentConversation.flatMap(conv => [conv.question, conv.initial_answer || conv.text])
-      }, {
-        timeout: 300000
-      });
+      }),
+    });
 
-      // Complete the progress bar only after response is received
-      setLoadingProgress(100);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
 
-      const newConversation = {
-        id: uuidv4(),
-        question: query,
-        text: response.data.response,
-        initial_answer: response.data.initial_answer,
-        video: response.data.urls || [],
-        video_titles: response.data.video_titles || [],
-        video_timestamps: response.data.video_timestamps || {},
-        videoLinks: response.data.video_links || {},
-        related_products: response.data.related_products || [],
-        timestamp: new Date().toISOString()
-      };
+    // Create a new conversation object with a temporary placeholder
+    const newConversation = {
+      id: uuidv4(),
+      question: query,
+      text: '',
+      video: [],
+      videoLinks: {},
+      related_products: [],
+      timestamp: new Date().toISOString()
+    };
 
-      // Update conversation and sessions while maintaining the loading state
-      setCurrentConversation(prev => {
-        const updatedConversation = [...prev, newConversation];
-        setSessions(prevSessions => {
-          const updatedSessions = prevSessions.map(session => {
-            if (session.id === currentSessionId) {
-              return {
-                ...session,
-                conversations: updatedConversation
-              };
+    // Add the conversation to state immediately
+    setCurrentConversation(prev => [...prev, newConversation]);
+
+    // Process the stream
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      // Decode the chunk and split by lines
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n').filter(line => line.trim());
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(5));
+
+            if (data.type === 'chunk') {
+              // Update the accumulated response
+              accumulatedResponse += data.response;
+              
+              // Update the conversation with the latest chunk
+              setCurrentConversation(prev => {
+                const updatedConversation = [...prev];
+                const lastIndex = updatedConversation.length - 1;
+                updatedConversation[lastIndex] = {
+                  ...updatedConversation[lastIndex],
+                  text: accumulatedResponse,
+                  videoLinks: data.video_links || {},
+                  related_products: data.related_products || []
+                };
+                return updatedConversation;
+              });
+
+              // Update loading progress
+              setLoadingProgress(prev => Math.min(75 + (prev * 0.25), 95));
+            } else if (data.type === 'final' || data.done) {
+              // Final update with complete response
+              setCurrentConversation(prev => {
+                const updatedConversation = [...prev];
+                const lastIndex = updatedConversation.length - 1;
+                updatedConversation[lastIndex] = {
+                  ...updatedConversation[lastIndex],
+                  text: data.response,
+                  videoLinks: data.video_links || {},
+                  related_products: data.related_products || []
+                };
+                return updatedConversation;
+              });
+
+              // Update sessions
+              setSessions(prevSessions => {
+                const updatedSessions = prevSessions.map(session => {
+                  if (session.id === currentSessionId) {
+                    return {
+                      ...session,
+                      conversations: [...session.conversations, {
+                        ...newConversation,
+                        text: data.response,
+                        videoLinks: data.video_links || {},
+                        related_products: data.related_products || []
+                      }]
+                    };
+                  }
+                  return session;
+                });
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedSessions));
+                return updatedSessions;
+              });
+
+              setLoadingProgress(100);
+              break;
             }
-            return session;
-          });
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedSessions));
-          return updatedSessions;
-        });
-        return updatedConversation;
-      });
-
-      setSearchQuery("");
-    } catch (error) {
-      console.error("Error in handleSearch:", error);
-      clearInterval(fastProgressInterval);
-      setLoadingProgress(0);
-      setSearchQuery("");
-    } finally {
-      setIsLoading(false);
-      setLoadingQuestionIndex(null);
-      setIsSearching(false);
+          } catch (e) {
+            console.error('Error parsing SSE data:', e);
+          }
+        }
+      }
     }
-  };
+
+  } catch (error) {
+    console.error("Error in handleSearch:", error);
+    setLoadingProgress(0);
+  } finally {
+    setIsLoading(false);
+    setLoadingQuestionIndex(null);
+    setIsSearching(false);
+    setSearchQuery("");
+  }
+};
+
+
+
 
   // Update handleNewConversation to properly handle session creation
   const handleNewConversation = () => {
