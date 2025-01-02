@@ -2,7 +2,7 @@ import os
 import uuid
 import re
 import logging
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, Response
 from werkzeug.utils import secure_filename
 from docx import Document
 from dotenv import load_dotenv
@@ -478,139 +478,128 @@ def chat():
             ai = chat_history[i + 1] if i + 1 < len(chat_history) else ""
             formatted_history.append((human, ai))
 
-        # Add relevancy check
-        relevance_check_prompt = f"""
-        Given the following question or message and the chat history, determine if it is:
-        1. A greeting or send-off like "thankyou" or "goodbye" or messages or casual messages like 'hey' or 'hello' or general conversation starter
-        2. Related to woodworking, tools, home improvement, or the assistant's capabilities and also query about bents-woodworking youtube channel general questions.
-        3. Related to the company, its products, services, or business operations
-        4. A continuation or follow-up question to the previous conversation
-        5. Related to violence, harmful activities, or other inappropriate content
-        6. Completely unrelated to the above topics and not a continuation of the conversation
-        7. if user is asking about jason bents.
+        def generate_response():
+            # Check relevance first
+            relevance_check_prompt = f"""
+            Given the following question or message and the chat history, determine if it is:
+            1. A greeting or send-off like "thankyou" or "goodbye" or messages or casual messages like 'hey' or 'hello' or general conversation starter
+            2. Related to woodworking, tools, home improvement, or the assistant's capabilities and also query about bents-woodworking youtube channel general questions.
+            3. Related to the company, its products, services, or business operations
+            4. A continuation or follow-up question to the previous conversation
+            5. Related to violence, harmful activities, or other inappropriate content
+            6. Completely unrelated to the above topics and not a continuation of the conversation
+            7. if user is asking about jason bents.
 
-        If it falls under category 1, respond with 'GREETING'.
-        If it falls under categories 2, 3, 4 or 7 respond with 'RELEVANT'.
-        If it falls under category 5, respond with 'INAPPROPRIATE'.
-        If it falls under category 6, respond with 'NOT RELEVANT'.
+            If it falls under category 1, respond with 'GREETING'.
+            If it falls under categories 2, 3, 4 or 7 respond with 'RELEVANT'.
+            If it falls under category 5, respond with 'INAPPROPRIATE'.
+            If it falls under category 6, respond with 'NOT RELEVANT'.
 
-        Chat History:
-        {formatted_history[-3:] if formatted_history else "No previous context"}
+            Chat History:
+            {formatted_history[-3:] if formatted_history else "No previous context"}
 
-        Current Question: {user_query}
-        
-        Response (GREETING, RELEVANT, INAPPROPRIATE, or NOT RELEVANT):
-        """
-        
-        relevance_response = llm.predict(relevance_check_prompt)
-        
-        # Handle non-relevant cases using LLM
-        if "GREETING" in relevance_response.upper():
-            greeting_prompt = f"""
-            The following message is a greeting or casual message. Please provide a friendly and engaging response.
-
-            Message: {user_query}
-
-            Response:
+            Current Question: {user_query}
+            
+            Response (GREETING, RELEVANT, INAPPROPRIATE, or NOT RELEVANT):
             """
-            greeting_response = llm.predict(greeting_prompt)
-            return jsonify({
-                'response': greeting_response,
-                'related_products': [],
-                'urls': [],
-                'contexts': [],
-                'video_links': {}
-            })
-        elif "INAPPROPRIATE" in relevance_response.upper():
-            inappropriate_prompt = f"""
-            The following message is inappropriate or related to harmful activities. Please provide a polite and firm response indicating the limitations of the assistant.
+            
+            relevance_response = llm.predict(relevance_check_prompt)
+            
+            if "GREETING" in relevance_response.upper():
+                greeting_prompt = f"""
+                The following message is a greeting or casual message. Please provide a friendly and engaging response.
+                Message: {user_query}
+                Response:
+                """
+                greeting_response = llm.predict(greeting_prompt)
+                yield json.dumps({
+                    'response': greeting_response,
+                    'type': 'greeting',
+                    'done': True
+                }) + '\n'
+                return
 
-            Message: {user_query}
+            if "INAPPROPRIATE" in relevance_response.upper():
+                inappropriate_prompt = f"""
+                The following message is inappropriate or related to harmful activities. Please provide a polite and firm response indicating the limitations of the assistant.
+                Message: {user_query}
+                Response:
+                """
+                inappropriate_response = llm.predict(inappropriate_prompt)
+                yield json.dumps({
+                    'response': inappropriate_response,
+                    'type': 'inappropriate',
+                    'done': True
+                }) + '\n'
+                return
 
-            Response:
-            """
-            inappropriate_response = llm.predict(inappropriate_prompt)
-            return jsonify({
-                'response': inappropriate_response,
-                'related_products': [],
-                'urls': [],
-                'contexts': [],
-                'video_links': {}
-            })
-        elif "NOT RELEVANT" in relevance_response.upper():
-              not_relevant_prompt = f"""
-              The following question is not directly related to woodworking or the assistant's expertise. Provide a direct response that:
-              1. Politely acknowledges the question
-              2. Explains that you are specialized in woodworking and Jason Bent's content
-              3. Asks them to rephrase their question to relate to woodworking topics
-    
-              Question: {user_query}
+            if "NOT RELEVANT" in relevance_response.upper():
+                not_relevant_prompt = f"""
+                The following question is not directly related to woodworking or the assistant's expertise. Provide a direct response that:
+                1. Politely acknowledges the question
+                2. Explains that you are specialized in woodworking and Jason Bent's content
+                3. Asks them to rephrase their question to relate to woodworking topics
+                Question: {user_query}
+                Response (start directly with your message):
+                """
+                not_relevant_response = llm.predict(not_relevant_prompt)
+                yield json.dumps({
+                    'response': not_relevant_response.strip(),
+                    'type': 'not_relevant',
+                    'done': True
+                }) + '\n'
+                return
 
-              Response (start directly with your message):
-              """
-              not_relevant_response = llm.predict(not_relevant_prompt)
-              return jsonify({
-                  'response': not_relevant_response.strip(),
-                  'related_products': [],
-                  'urls': [],
-                  'contexts': [],
-                  'video_links': {}
-    })
-        # Only proceed with query rewriting if the query is relevant
-        rewritten_query = rewrite_query(user_query, formatted_history)
-        logging.debug(f"Query rewritten from '{user_query}' to '{rewritten_query}'")
+            # For relevant queries, proceed with normal processing
+            rewritten_query = rewrite_query(user_query, formatted_history)
+            retriever = CustomNeonRetriever(table_name="bents")
+            
+            # Initialize response accumulator
+            accumulated_response = ""
+            
+            # Create streaming prompt
+            prompt = ChatPromptTemplate.from_messages([
+                SystemMessagePromptTemplate.from_template(SYSTEM_INSTRUCTIONS),
+                HumanMessagePromptTemplate.from_template(
+                    "Context: {context}\n\nChat History: {chat_history}\n\nQuestion: {question}\n\n"
+                    "Instruction: Only use the provided context to generate the answer."
+                )
+            ])
 
-        # Continue with your existing retrieval and response generation logic...
-        retriever = CustomNeonRetriever(table_name="bents")
-        
-        # Define prompt
-        prompt = ChatPromptTemplate.from_messages([
-            SystemMessagePromptTemplate.from_template(SYSTEM_INSTRUCTIONS),
-            HumanMessagePromptTemplate.from_template(
-                "Context: {context}\n\nChat History: {chat_history}\n\nQuestion: {question}\n\n"
-                "Instruction: Only use the provided context to generate the answer."
-            )
-        ])
-        
-        qa_chain = ConversationalRetrievalChain.from_llm(
-            llm=llm,
-            retriever=retriever,
-            combine_docs_chain_kwargs={"prompt": prompt},
-            return_source_documents=True
-        )
-        
-        # Use the rewritten query instead of the original
-        result = qa_chain({"question": rewritten_query, "chat_history": formatted_history})
-        
-        # Extract answer and source documents
-        raw_answer = result['answer']  # Store the raw answer before processing
-        source_documents = result['source_documents']
-        
-        # Process source documents
-        urls = []
-        contexts = []
-        for doc in source_documents:
-            if 'url' in doc.metadata:
-                urls.append(doc.metadata['url'])
-            contexts.append(doc.page_content)
-        
-        # Process the answer to get video dictionary
-        processed_answer, video_dict = process_answer(raw_answer, urls, source_documents)
-        
-        response_data = {
-            'response': processed_answer,
-            'raw_response': raw_answer,  # Include the raw LLM response
-            'video_links': video_dict,
-            'related_products': get_all_related_products(video_dict),
-            'urls': urls
-        }
-        
-        # Only include 'Related Videos' if there are actual video links
-        if video_dict:
-            response_data['related_videos'] = video_dict
-        
-        return jsonify(response_data)
-        
+            # Get relevant documents
+            docs = retriever.get_relevant_documents(rewritten_query)
+            
+            # Stream the response
+            for chunk in llm.stream(prompt.format(
+                context="\n\n".join(doc.page_content for doc in docs),
+                chat_history=formatted_history,
+                question=rewritten_query
+            )):
+                chunk_text = chunk.content
+                accumulated_response += chunk_text
+                
+                # Process the accumulated response
+                processed_answer, video_dict = process_answer(accumulated_response, [], docs)
+                
+                yield json.dumps({
+                    'response': chunk_text,
+                    'type': 'chunk',
+                    'done': False,
+                    'video_links': video_dict,
+                    'related_products': get_all_related_products(video_dict)
+                }) + '\n'
+
+            # Send final message
+            yield json.dumps({
+                'response': accumulated_response,
+                'type': 'final',
+                'done': True,
+                'video_links': video_dict,
+                'related_products': get_all_related_products(video_dict)
+            }) + '\n'
+
+        return Response(generate_response(), mimetype='text/event-stream')
+
     except Exception as e:
         logging.error(f"Error in chat route: {str(e)}", exc_info=True)
         return jsonify({'error': 'An error occurred processing your request'}), 500
