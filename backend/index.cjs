@@ -28,7 +28,7 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // Flask backend URL
-const FLASK_BACKEND_URL = 'https://bents-llm-server.vercel.app';
+const FLASK_BACKEND_URL = 'http://127.0.0.1:5000';
 
 
 
@@ -78,11 +78,47 @@ app.post('/contact', async (req, res) => {
 
 app.post('/chat', async (req, res) => {
   try {
-    const response = await axios.post(`${FLASK_BACKEND_URL}/chat`, req.body);
-    res.json(response.data);
+    // Set headers for streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    const response = await axios({
+      method: 'post',
+      url: `${FLASK_BACKEND_URL}/chat`,
+      data: req.body,
+      responseType: 'stream'
+    });
+
+    // Pipe the Flask response directly to the client
+    response.data.on('data', (chunk) => {
+      const lines = chunk.toString().split('\n').filter(line => line.trim());
+      lines.forEach(line => {
+        try {
+          const data = JSON.parse(line);
+          res.write(`data: ${JSON.stringify(data)}\n\n`);
+        } catch (e) {
+          console.error('Error parsing chunk:', e);
+        }
+      });
+    });
+
+    response.data.on('end', () => {
+      res.end();
+    });
+
+    response.data.on('error', (error) => {
+      console.error('Error in stream:', error);
+      res.end();
+    });
+
   } catch (error) {
     console.error('Error forwarding chat request to Flask:', error);
-    res.status(500).json({ message: 'An error occurred while processing your chat request.' });
+    res.write(`data: ${JSON.stringify({ 
+      error: 'An error occurred while processing your chat request.',
+      done: true 
+    })}\n\n`);
+    res.end();
   }
 });
 
